@@ -185,7 +185,13 @@ async function summaryFor(query) {
 }
 
 export function startServer(port = config.port) {
-  const telegramGateway = new TelegramPollingGateway(createBenzTelegramHandler({ findSummary: summaryFor }), config.telegram);
+  const telegramGateway = new TelegramPollingGateway(createBenzTelegramHandler({
+    findSummary: summaryFor,
+    refreshSummary: async (query) => {
+      clearAllCaches();
+      return summaryFor(query);
+    },
+  }), config.telegram);
   if (config.telegram.enabled && !telegramGateway.isConfigured()) {
     throw new Error("TELEGRAM_POLLING_ENABLED=true requires a valid TELEGRAM_BOT_TOKEN.");
   }

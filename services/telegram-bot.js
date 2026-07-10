@@ -1,4 +1,4 @@
-export function createBenzTelegramHandler({ findSummary }) {
+export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary }) {
   return async function handleTelegramMessage(message) {
     const text = String(message?.text || "").trim();
     if (!text) return null;
@@ -7,8 +7,21 @@ export function createBenzTelegramHandler({ findSummary }) {
       return [
         "Benz AI ищет АЗС и вероятностные данные о наличии топлива.",
         "Отправьте название города или региона России, например: Воронеж.",
+        "Для принудительного обновления используйте: /refresh Воронеж.",
         "Веб-версия показывает полный список станций, фильтры и источники.",
       ].join("\n\n");
+    }
+
+    const refreshMatch = text.match(/^\/refresh(?:@\w+)?(?:\s+(.+))?$/i);
+    if (refreshMatch) {
+      const query = refreshMatch[1]?.trim();
+      if (!query) return "Укажите город или регион после команды, например: /refresh Новая Усмань";
+      try {
+        return formatTelegramSummary(await refreshSummary(query));
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : String(error);
+        return `Не удалось обновить данные: ${messageText}`;
+      }
     }
 
     if (text.startsWith("/")) {
@@ -74,11 +87,12 @@ function statusRank(status) {
 }
 
 function formatStation(station, number) {
-  const fuels = Object.entries(station.fuelStatus || {}).map(([fuel, status]) => {
-    const price = Number(station.prices?.[fuel]?.value);
-    const priceText = Number.isFinite(price) ? ` · ${price.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽` : "";
-    return `${fuel}: ${statusText[status] || status}${priceText}`;
+  const fuelKeys = new Set([...Object.keys(station.fuelStatus || {}), ...Object.keys(station.prices || {})]);
+  const fuels = [...fuelKeys].map((fuel) => {
+    const status = station.fuelStatus?.[fuel];
+    return `${fuel}: ${statusText[status] || "⚪ нет данных"}`;
   });
+  const priceLines = formatPrices(station);
   const sourceEvidence = formatSourceEvidence(station);
   const address = String(station.address || "Адрес не указан").replace(/^Россия,\s*/i, "");
   const observedAt = formatObservedAt(station.lastTransactionAt);
@@ -90,10 +104,28 @@ function formatStation(station, number) {
     `${number}. ${statusText[station.overallStatus] || "⚪ нет данных"} — ${station.name || "АЗС"}`,
     `📍 ${address}`,
     fuels.length ? `⛽ ${fuels.join("; ")}` : "⛽ Данные по видам топлива отсутствуют",
+    ...priceLines,
     stationOnlyStatus ? "ℹ️ Общий статус относится ко всей АЗС; по отдельным видам топлива данных нет." : "",
     observedAt ? `🕒 Данные: ${observedAt}` : "",
     sourceEvidence ? `Сигналы: ${sourceEvidence}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function formatPrices(station) {
+  const prices = Object.entries(station.prices || {}).filter(([, price]) => Number.isFinite(Number(price?.value)));
+  if (!prices.length) return [];
+  const values = prices.map(([fuel, price]) => {
+    const value = Number(price.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${fuel} — ${value} ₽`;
+  });
+  const sources = [...new Set(prices.map(([, price]) => sourceText[price.source] || price.source).filter(Boolean))];
+  const metadata = [sources.length ? `источник: ${sources.join(", ")}` : "", station.priceUpdatedAt ? `обновлено: ${station.priceUpdatedAt}` : ""]
+    .filter(Boolean)
+    .join(" · ");
+  return [
+    `💰 Последние опубликованные цены: ${values.join("; ")}`,
+    metadata ? `   ${metadata}` : "",
+  ].filter(Boolean);
 }
 
 function formatSourceEvidence(station) {

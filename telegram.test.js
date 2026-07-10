@@ -60,7 +60,8 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       address: "Россия, Москва, Тестовая улица, 1",
       overallStatus: "available",
       fuelStatus: { 95: "available" },
-      prices: { 95: { value: 70.59 } },
+      prices: { 95: { value: 70.59, currency: "RUB", source: "yandex" } },
+      priceUpdatedAt: "10 июля 2026",
       sourceRefs: [{ source: "tbank" }, { source: "yandex" }],
       availabilityBySource: { tbank: { overallStatus: "available", fuelStatus: { 95: "available" } } },
       lastTransactionAt: "2026-07-10T18:54:42.917Z",
@@ -70,9 +71,25 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /Татнефть/);
   assert.match(text, /Тестовая улица, 1/);
   assert.match(text, /70,59 ₽/);
+  assert.match(text, /Последние опубликованные цены/);
+  assert.match(text, /источник: Яндекс/);
   assert.match(text, /T‑Bank — вероятно есть/);
   assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
+});
+
+test("refresh command invokes the uncached summary workflow", async () => {
+  let refreshedQuery = null;
+  const handler = createBenzTelegramHandler({
+    findSummary: async () => { throw new Error("ordinary lookup must not run"); },
+    refreshSummary: async (query) => {
+      refreshedQuery = query;
+      return { location: { name: query }, summary: { total: 0, statuses: {}, fuels: {}, withPrices: 0 }, stations: [], warnings: [] };
+    },
+  });
+  const response = await handler({ text: "/refresh Новая Усмань" });
+  assert.equal(refreshedQuery, "Новая Усмань");
+  assert.match(response, /Новая Усмань/);
 });
 
 test("explains a station-wide negative report separately from empty fuel statuses", () => {
