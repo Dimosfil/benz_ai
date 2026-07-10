@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { normalizeLocationQueryWithLlm } from "./location-query-normalizer.js";
 
 const cache = new Map();
 let queue = Promise.resolve();
@@ -44,6 +45,10 @@ function exactCandidateMatch(item, candidate) {
   return normalizedPlaceName(item?.name) === wanted;
 }
 
+function exactPlaceNameMatch(item, placeName) {
+  return normalizedPlaceName(item?.name) === normalizedPlaceName(placeName);
+}
+
 async function requestPlaces(query) {
   return schedule(async () => {
     const url = new URL(config.geocoder.url);
@@ -71,6 +76,15 @@ export async function geocodeLocation(rawQuery) {
     const exact = results.find((item) => exactCandidateMatch(item, candidate));
     if (exact) { found = exact; break; }
     found ||= results[0];
+  }
+  const hasExactMatch = found && geocoderQueryCandidates(query).some((candidate) => exactCandidateMatch(found, candidate));
+  if (!hasExactMatch) {
+    const normalized = await normalizeLocationQueryWithLlm(query);
+    if (normalized) {
+      const results = await requestPlaces(normalized.query);
+      const verified = results.find((item) => exactPlaceNameMatch(item, normalized.placeName));
+      if (verified) found = verified;
+    }
   }
   if (!found) throw new Error(`Не удалось найти «${query}» в России`);
 
