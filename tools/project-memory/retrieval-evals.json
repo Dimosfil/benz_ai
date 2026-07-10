@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "description": "Small reviewable retrieval eval set for the local GI project-memory RAG.",
+  "defaults": {
+    "top_k": 8
+  },
+  "cases": [
+    {
+      "id": "exact_tools_rebuild_vector_command",
+      "query": "gi tools rebuild vector",
+      "mode": "keyword",
+      "expected_paths_any": [
+        "COMMANDS.md",
+        "patterns/RAG_SYSTEM_STRUCTURE.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Exact command names should be found by keyword retrieval."
+    },
+    {
+      "id": "startup_avoid_whole_repo_scan",
+      "query": "restore startup context without reading the whole repository",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "AGENTS.md",
+        "patterns/RAG_STARTUP_FLOW.md",
+        "patterns/FIRST_MESSAGE_HANDLING.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Startup retrieval must stay token-conscious and bounded."
+    },
+    {
+      "id": "vector_store_behind_adapter",
+      "query": "semantic search without locking the project to Chroma or one vector database",
+      "mode": "semantic",
+      "expected_paths_any": [
+        "patterns/RAG_SYSTEM_STRUCTURE.md",
+        "patterns/SEMANTIC_RAG_RETRIEVAL.md",
+        "patterns/FULL_RAG_AGENT_PLATFORM.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Vector stores should remain adapters behind the RAG contract."
+    },
+    {
+      "id": "portable_project_memory_specs",
+      "query": "project memory specifications that let another agent rebuild behavior on another framework",
+      "mode": "semantic",
+      "expected_paths_any": [
+        "patterns/PROJECT_MEMORY_SPECIFICATIONS.md",
+        "tools/project-memory/README.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Durable memory should preserve product behavior and verification, not only current code."
+    },
+    {
+      "id": "connected_projects_register",
+      "query": "where should an agent find external project folders git urls service roles and integration boundaries",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "patterns/PROJECT_MEMORY_SPECIFICATIONS.md",
+        "templates/CONNECTED_PROJECTS.template.md",
+        "tools/project-memory/specs/integration-contracts/connected-projects.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Agents need a durable register for connected projects before touching integrations or external folders."
+    },
+    {
+      "id": "config_service_runtime_discovery",
+      "query": "resolve runtime service URLs through config service instead of guessing ports",
+      "mode": "hybrid",
+      "expected_paths_any": [
+        "patterns/SERVICE_DISCOVERY_CONFIG.md",
+        "AGENTS.md",
+        "COMMANDS.md"
+      ],
+      "min_any_hits": 1,
+      "why": "Service lookup rules are exact enough for keyword retrieval and conceptual enough for semantic fallback."
+    }
+  ]
+}
