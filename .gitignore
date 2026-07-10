@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Local service credentials
+.env
+.env.*
+!.env.example
+
 # Local/generated AI-agent memory and runtime noise
 tools/project-memory/*.sqlite
 tools/project-memory/*.sqlite-*

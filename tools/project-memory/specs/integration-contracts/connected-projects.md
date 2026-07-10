@@ -1,5 +1,53 @@
 # Connected Projects And External Sources
 
+## Telegram Bot Template / gateway logic source
+
+- Local source: `D:\AI\telegram_bot_template`.
+- Purpose: source of the Telegram long-polling gateway contract used to expose
+  Benz AI through Telegram alongside the existing web interface.
+- Adopted scope: token validation, `getUpdates` offset handling, text-message
+  normalization, `sendMessage`, retry state, safe health status and shutdown.
+- Excluded scope: Fastify, React admin panel, TypeScript monorepo structure,
+  SQLite sessions, guide delivery, subscription checks, leads, uploads,
+  callback buttons and template-specific business commands.
+- Runtime relationship: design/source reference only. Benz AI owns a native
+  JavaScript adaptation and does not load the sibling repository at runtime.
+- Access boundary: inspect only gateway, configuration, DTO and focused test
+  files; never read its local `.env`, databases, archives, logs or bot data.
+
+## LLM Providers / DeepSeek logic source
+
+- Local source: `D:\AI\llm_providers`.
+- Purpose: source of the narrow, reusable DeepSeek chat-completions transport
+  adopted by Benz AI.
+- Integration role: design/source reference only; Benz AI owns its local
+  `providers/deepseek.js` adaptation and does not depend on the sibling project
+  at runtime.
+- Adopted scope: DeepSeek server-side configuration, OpenAI-compatible request
+  shape, Bearer authentication, response validation and provider tests.
+- Excluded scope: Codex, mock and generic provider selection, local runtime
+  configuration, secrets and generated artifacts.
+- Access boundary: inspect only DeepSeek-relevant source files when updating
+  this adapter. Never copy or read source-project secrets or runtime data.
+- Detailed contract: `tools/project-memory/specs/deepseek-integration.md`.
+
+## Multigo
+
+- Purpose: nearest-place catalog for the automotive fueling category; the raw
+  response can include EV charging stations.
+- Candidate API: `POST https://multigo.ru/api/9/near/list` with JSON body
+  `{"lat": <latitude>, "lng": <longitude>, "limit": <integer>}`.
+- Verified on 2026-07-10: HTTP 200 with `err: 0` and `data.list`; each item
+  included an ID, name, coordinates in `loc`, address, category, status,
+  services and `fuels`.
+- Integration role: catalog enrichment only. The generic object status and an
+  absent/empty `fuels` array must not be shown as fuel availability or price.
+- Territory boundary: normalize the response, keep only coordinates inside the
+  requested bbox, and exclude pure EV charging records without fuels before
+  aggregation. Distinct Multigo IDs must remain distinct records.
+- Access boundary: one user-triggered request per search-area centre, cached
+  for 60 seconds; no background crawling.
+
 ## Sber AZS
 
 - Purpose: каталог АЗС и вероятностные статусы доступности на основе платежных
@@ -64,5 +112,7 @@
 - Integration role: independent availability evidence alongside T-Bank and
   Sber, preserving its own status, detail, timestamp, confirmations and
   confidence instead of collapsing them into another provider's claim.
+- Territory boundary: the radius response is broader than some geocoded
+  settlements; only coordinates inside the requested bbox enter aggregation.
 - Evidence: `https://gdebenz.ru/about`, `https://gdebenz.ru/terms`,
   `https://gdebenz.ru/rules`, and the verified `/api/nearby` response.

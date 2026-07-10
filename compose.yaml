@@ -1,0 +1,33 @@
+services:
+  benz-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: benz-ai:local
+    init: true
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      CHROME_PATH: /usr/bin/chromium
+      CHROME_NO_SANDBOX: "1"
+      TELEGRAM_POLLING_ENABLED: "${TELEGRAM_POLLING_ENABLED:-false}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_API_BASE_URL: "${TELEGRAM_API_BASE_URL:-https://api.telegram.org}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+      DEEPSEEK_MODEL: "${DEEPSEEK_MODEL:-deepseek-chat}"
+      DEEPSEEK_TIMEOUT_MS: "${DEEPSEEK_TIMEOUT_MS:-60000}"
+      BENZUP_API_TOKEN: "${BENZUP_API_TOKEN:-}"
+      BENZUP_API_URL: "${BENZUP_API_URL:-https://api.omt-consult.ru/v2/stations}"
+      ENABLE_YANDEX_PRICES: "${ENABLE_YANDEX_PRICES:-1}"
+      YANDEX_PRICE_LIMIT: "${YANDEX_PRICE_LIMIT:-0}"
+      GEOCODER_USER_AGENT: "${GEOCODER_USER_AGENT:-BenzAI/0.1 Docker fuel search}"
+      SOURCE_USER_AGENT: "${SOURCE_USER_AGENT:-BenzAI/0.1 Docker fuel aggregator}"
+    ports:
+      - "${BENZ_AI_HOST_PORT:-3000}:3000"
+    shm_size: 256mb
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

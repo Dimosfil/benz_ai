@@ -1,5 +1,5 @@
-const CACHE_TTL_MS = 60_000;
-const MAX_RADIUS_KM = 30;
+import { config } from "../config.js";
+import { inBbox } from "../domain/stations.js";
 
 const cache = new Map();
 
@@ -67,7 +67,7 @@ function centerAndRadius(bbox) {
   const lon = (bbox.minLon + bbox.maxLon) / 2;
   const latKm = (bbox.maxLat - bbox.minLat) * 111;
   const lonKm = (bbox.maxLon - bbox.minLon) * 111 * Math.cos(lat * Math.PI / 180);
-  const radiusKm = Math.min(MAX_RADIUS_KM, Math.max(3, Math.ceil(Math.hypot(latKm, lonKm) / 2)));
+  const radiusKm = Math.min(config.gdebenz.maxRadiusKm, Math.max(3, Math.ceil(Math.hypot(latKm, lonKm) / 2)));
   return { lat, lon, radiusKm };
 }
 
@@ -75,21 +75,25 @@ export async function fetchGdebenz(bbox) {
   const { lat, lon, radiusKm } = centerAndRadius(bbox);
   const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}`;
   const saved = cache.get(key);
-  if (saved && Date.now() - saved.createdAt < CACHE_TTL_MS) return { ...saved.value, cached: true };
-  const url = new URL("https://gdebenz.ru/api/nearby");
+  if (saved && Date.now() - saved.createdAt < config.gdebenz.cacheTtlMs) return { ...saved.value, cached: true };
+  const url = new URL(config.gdebenz.url);
   url.search = new URLSearchParams({ lat: String(lat), lon: String(lon), radius_km: String(radiusKm) });
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(20_000),
-    headers: { Accept: "application/json", "User-Agent": process.env.SOURCE_USER_AGENT || "BenzAI/0.1 local fuel aggregator" },
+    signal: AbortSignal.timeout(config.gdebenz.timeoutMs),
+    headers: { Accept: "application/json", "User-Agent": config.sourceUserAgent },
   });
   if (!response.ok) throw new Error(`ГдеБЕНЗ вернул HTTP ${response.status}`);
   const data = await response.json();
   if (!Array.isArray(data.stations)) throw new Error("ГдеБЕНЗ вернул неизвестный формат ответа");
+  const normalized = data.stations.map(normalizeGdebenzStation);
+  const stations = normalized.filter((station) => inBbox(station, bbox));
   const value = {
-    stations: data.stations.map(normalizeGdebenzStation),
+    stations,
     available: true,
     updatedAt: data.updated || null,
     radiusKm,
+    returned: normalized.length,
+    droppedOutside: normalized.length - stations.length,
   };
   cache.set(key, { createdAt: Date.now(), value });
   return { ...value, cached: false };

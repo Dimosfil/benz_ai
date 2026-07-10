@@ -1,3 +1,17 @@
+import {
+  fuelName,
+  labels,
+  minimumPrice,
+  selectionStatus,
+  sourceNames,
+  stationFreshText,
+  stationFuelText,
+  stationPriceText,
+  stationSources,
+} from "./station-view.js";
+import { COLUMN_KEYS, moveColumnOrder, normalizeColumnOrder } from "./table-order.js";
+import { filterStations, normalizeSelectedFuels } from "./station-filter.js";
+
 const locationInput = document.querySelector("#location");
 const fuel = document.querySelector("#fuel");
 const fuelAny = document.querySelector("#fuel-any");
@@ -15,6 +29,7 @@ const pageNumber = document.querySelector("#page-number");
 const pageSummary = document.querySelector("#page-summary");
 const tableWrap = document.querySelector(".table-wrap");
 const tableResetSize = document.querySelector("#table-reset-size");
+const tableHeaderRow = document.querySelector(".station-table thead tr");
 const notice = document.querySelector("#notice");
 const count = document.querySelector("#count");
 const meta = document.querySelector("#meta");
@@ -30,14 +45,12 @@ let sortDirection = 1;
 let pendingTableScroll = null;
 let saveTimer = null;
 let lastTableSize = null;
+let draggedColumn = null;
 
 const UI_STATE_KEY = "benz-ai.ui.v1";
-const sortKeys = new Set(["name", "sources", "status", "fuel", "price", "fresh"]);
-
-const labels = { available: "Вероятно есть", maybe_available: "Возможно есть", not_available: "Вероятно нет", no_data: "Нет данных" };
-const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
-const sourceNames = { tbank: "T‑Bank Fuel", sber: "Sber AZS", gdebenz: "ГдеБЕНЗ", benzup: "BenzUp", yandex: "Яндекс Карты" };
-const fuelNames = { DT: "ДТ", LPG: "Пропан", CNG: "Метан" };
+const sortKeys = new Set(COLUMN_KEYS);
+let columnOrder = [...COLUMN_KEYS];
+const headersByColumn = new Map([...tableHeaderRow.children].map((header) => [header.dataset.key, header]));
 
 function saveUIState() {
   clearTimeout(saveTimer);
@@ -56,6 +69,7 @@ function saveUIState() {
       currentPage,
       sortKey,
       sortDirection,
+      columnOrder,
       fuelOpen: fuel.open,
       statusOpen: status.open,
       table: {
@@ -93,6 +107,7 @@ function restoreUIState() {
   if (Number.isInteger(saved.currentPage) && saved.currentPage > 0) currentPage = saved.currentPage;
   if (sortKeys.has(saved.sortKey)) sortKey = saved.sortKey;
   sortDirection = saved.sortDirection === -1 ? -1 : 1;
+  columnOrder = normalizeColumnOrder(saved.columnOrder);
   fuel.open = Boolean(saved.fuelOpen);
   status.open = Boolean(saved.statusOpen);
   if (saved.table && typeof saved.table === "object") {
@@ -110,24 +125,26 @@ function restoreUIState() {
   }
 }
 
-function fuelName(type) {
-  return fuelNames[type] || `АИ‑${type}`;
+function applyColumnOrder() {
+  tableHeaderRow.replaceChildren(...columnOrder.map((key) => headersByColumn.get(key)));
 }
 
 function selectedFuels() {
-  return fuelInputs.filter((input) => input.checked).map((input) => input.value);
-}
-
-function selectionStatus(station, selected) {
-  if (!selected.length) return station.overallStatus;
-  const values = selected.map((type) => station.fuelStatus[type]).filter(Boolean);
-  if (!values.length) return "no_data";
-  return new Set(values).size === 1 ? values[0] : "maybe_available";
+  return normalizeSelectedFuels(
+    fuelInputs.filter((input) => input.checked).map((input) => input.value),
+    fuelInputs.map((input) => input.value),
+  );
 }
 
 function updateFuelPicker(changed) {
   if (changed === fuelAny && fuelAny.checked) fuelInputs.forEach((input) => { input.checked = false; });
   if (changed !== fuelAny && changed?.checked) fuelAny.checked = false;
+  // Selecting every known fuel must mean the same as "Any". Otherwise stations
+  // that have no per-fuel data disappear even though the user selected all types.
+  if (fuelInputs.every((input) => input.checked)) {
+    fuelInputs.forEach((input) => { input.checked = false; });
+    fuelAny.checked = true;
+  }
   if (!fuelInputs.some((input) => input.checked)) fuelAny.checked = true;
   const selected = selectedFuels();
   document.querySelector("#fuel-label").textContent = selected.length ? selected.map(fuelName).join(", ") : "Любое";
@@ -145,38 +162,12 @@ function updateStatusPicker(changed) {
   document.querySelector("#status-label").textContent = selected.length ? selected.map((value) => labels[value]).join(", ") : "Все статусы";
 }
 
-function stationSources(station) {
-  return (station.sourceRefs || [{ source: station.source }]).map((ref) => sourceNames[ref.source] || ref.source).join(" + ");
-}
-
-function stationFuelText(station, selected = []) {
-  const entries = selected.length ? selected.map((type) => [type, station.fuelStatus[type] || "no_data"]) : Object.entries(station.fuelStatus);
-  return entries.sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
-    .map(([type, value]) => `${fuelName(type)}: ${labels[value] || value}`).join(" · ") || "По видам топлива данных нет";
-}
-
-function stationPriceText(station) {
-  return Object.entries(station.prices || {}).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
-    .map(([type, price]) => `${fuelName(type)} — ${Number(price.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`)
-    .join(" · ") || "Цены не опубликованы";
-}
-
-function stationFreshText(station) {
-  const availabilityTime = station.lastTransactionAt ? `Наличие: ${formatter.format(new Date(station.lastTransactionAt))}` : "Время проверки неизвестно";
-  return station.priceUpdatedAt ? `${availabilityTime} · цены: ${station.priceUpdatedAt}` : availabilityTime;
-}
-
 function badge(statusValue) {
   const value = statusValue || "no_data";
   const element = document.createElement("span");
   element.className = `badge ${value}`;
   element.textContent = labels[value] || "Нет данных";
   return element;
-}
-
-function minimumPrice(station) {
-  const prices = Object.values(station.prices || {}).map((price) => Number(price.value)).filter(Number.isFinite);
-  return prices.length ? Math.min(...prices) : null;
 }
 
 function sortValue(station, key, selectedFuel) {
@@ -264,12 +255,7 @@ function renderSummary(data) {
 function renderStations() {
   const selectedFuel = selectedFuels();
   const selectedStatus = selectedStatuses();
-  const text = query.value.trim().toLocaleLowerCase("ru-RU");
-  const filtered = allStations.filter((station) => {
-    const hasSelectedFuel = !selectedFuel.length || selectedFuel.some((type) => station.fuelStatus[type]);
-    const actualStatus = selectionStatus(station, selectedFuel);
-    return hasSelectedFuel && (!selectedStatus.length || selectedStatus.includes(actualStatus)) && (!text || `${station.name} ${station.address}`.toLocaleLowerCase("ru-RU").includes(text));
-  });
+  const filtered = filterStations(allStations, { fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const sorted = sortStations(filtered, selectedFuel);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
@@ -299,7 +285,8 @@ function renderStations() {
     priceCell.textContent = stationPriceText(station);
     const freshCell = document.createElement("td");
     freshCell.textContent = stationFreshText(station);
-    row.append(stationCell, sourcesCell, statusCell, fuelCell, priceCell, freshCell);
+    const cells = { name: stationCell, sources: sourcesCell, status: statusCell, fuel: fuelCell, price: priceCell, fresh: freshCell };
+    row.append(...columnOrder.map((key) => cells[key]));
     return row;
   });
   if (!rows.length) {
@@ -392,6 +379,35 @@ document.querySelectorAll(".sort-button").forEach((button) => button.addEventLis
   currentPage = 1;
   renderStations();
 }));
+headersByColumn.forEach((header) => {
+  header.draggable = true;
+  header.title = "Перетащите заголовок, чтобы изменить порядок столбцов";
+  header.addEventListener("dragstart", (event) => {
+    draggedColumn = header.dataset.key;
+    header.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", draggedColumn);
+  });
+  header.addEventListener("dragover", (event) => {
+    if (!draggedColumn || draggedColumn === header.dataset.key) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    header.classList.add("is-drop-target");
+  });
+  header.addEventListener("dragleave", () => header.classList.remove("is-drop-target"));
+  header.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const bounds = header.getBoundingClientRect();
+    columnOrder = moveColumnOrder(columnOrder, draggedColumn, header.dataset.key, event.clientX > bounds.left + bounds.width / 2);
+    applyColumnOrder();
+    renderStations();
+    header.classList.remove("is-drop-target");
+  });
+  header.addEventListener("dragend", () => {
+    draggedColumn = null;
+    headersByColumn.forEach((item) => item.classList.remove("is-dragging", "is-drop-target"));
+  });
+});
 tableResetSize.addEventListener("click", () => {
   tableWrap.style.removeProperty("width");
   tableWrap.style.removeProperty("height");
@@ -402,6 +418,7 @@ fuel.addEventListener("toggle", scheduleSaveUIState);
 status.addEventListener("toggle", scheduleSaveUIState);
 window.addEventListener("pagehide", saveUIState);
 restoreUIState();
+applyColumnOrder();
 updateFuelPicker();
 updateStatusPicker();
 new ResizeObserver(scheduleSaveUIState).observe(tableWrap);

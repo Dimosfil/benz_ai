@@ -1,0 +1,89 @@
+import { config } from "../config.js";
+import { normalizeFuelName } from "../domain/stations.js";
+
+const cache = new Map();
+
+export function clearYandexCache() {
+  cache.clear();
+}
+
+function decodeEmbeddedHtml(value) {
+  return value
+    .replaceAll("\\u003c", "<")
+    .replaceAll("\\u003e", ">")
+    .replaceAll("\\u0026", "&")
+    .replaceAll('\\"', '"')
+    .replaceAll("&nbsp;", " ")
+    .replaceAll("&amp;", "&");
+}
+
+export function parseYandexFuelPrices(rawHtml) {
+  const html = decodeEmbeddedHtml(rawHtml);
+  const pattern = /search-fuel-info-view__name"[^>]*>(?<fuel>[^<]+)<\/div><div class="search-fuel-info-view__value"[^>]*>(?<price>[^<]*)<\/div>/g;
+  const prices = {};
+  for (const match of html.matchAll(pattern)) {
+    const value = Number(match.groups.price.replace(",", ".").replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(value) && value > 0) prices[normalizeFuelName(match.groups.fuel)] = { value, currency: "RUB", source: "yandex" };
+  }
+  const updated = html.match(/Обновлено (?<date>[^<\\]{1,80}) по данным/)?.groups?.date ?? null;
+  return { prices, updatedAt: updated };
+}
+
+export function isYandexVerificationCandidate(station) {
+  return station.overallStatus === "available" && Boolean(station.yandexOrgId);
+}
+
+async function checkStation(station) {
+  const saved = cache.get(station.yandexOrgId);
+  if (saved && Date.now() - saved.createdAt < config.yandex.cacheTtlMs) return { ...station, ...saved.value };
+  const response = await fetch(`https://yandex.ru/maps/org/${station.yandexOrgId}/`, {
+    signal: AbortSignal.timeout(config.yandex.timeoutMs),
+    headers: { "User-Agent": "Mozilla/5.0 BenzAI/0.1", "Accept-Language": "ru-RU,ru;q=0.9" },
+  });
+  if (!response.ok) throw new Error(`Яндекс Карты вернули HTTP ${response.status}`);
+  const parsed = parseYandexFuelPrices(await response.text());
+  const refs = [...(station.sourceRefs || []), { source: "yandex", externalId: station.yandexOrgId }];
+  const value = {
+    prices: { ...station.prices, ...parsed.prices },
+    priceUpdatedAt: parsed.updatedAt,
+    sourceRefs: [...new Map(refs.map((ref) => [`${ref.source}:${ref.externalId}`, ref])).values()],
+    yandexCheckedAt: new Date().toISOString(),
+  };
+  cache.set(station.yandexOrgId, { createdAt: Date.now(), value });
+  return { ...station, ...value };
+}
+
+export async function enrichYandexPrices(stations) {
+  if (!config.yandex.enabled) {
+    return { stations, eligible: 0, attempted: 0, checked: 0, warning: "Проверка Яндекс Карт отключена через ENABLE_YANDEX_PRICES=0." };
+  }
+  const eligible = stations.filter(isYandexVerificationCandidate);
+  const candidates = eligible.slice(0, config.yandex.limit);
+  const output = [...stations];
+  const errors = [];
+  let cursor = 0;
+  let checked = 0;
+  async function worker() {
+    while (cursor < candidates.length) {
+      const candidate = candidates[cursor++];
+      const index = output.indexOf(candidate);
+      try {
+        output[index] = await checkStation(candidate);
+        checked += 1;
+      } catch (error) {
+        errors.push(`${candidate.name}: ${error.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(config.yandex.concurrency, candidates.length) }, worker));
+  const warnings = [];
+  if (eligible.length > candidates.length) warnings.push(`Яндекс проверен только для первых ${candidates.length} АЗС со статусом «Вероятно есть».`);
+  if (errors.length) warnings.push(`Не удалось проверить Яндекс для ${errors.length} АЗС.`);
+  return {
+    stations: output,
+    eligible: eligible.length,
+    attempted: candidates.length,
+    checked,
+    warning: warnings.join(" ") || null,
+  };
+}

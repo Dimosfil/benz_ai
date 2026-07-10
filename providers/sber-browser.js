@@ -19,12 +19,15 @@ function findChrome() {
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome",
   ].filter(Boolean);
   return candidates.find((candidate) => existsSync(candidate)) || null;
 }
 
 export function chromeArguments(profileDir) {
-  return [
+  const args = [
     "--headless",
     "--no-startup-window",
     "--disable-gpu",
@@ -37,6 +40,10 @@ export function chromeArguments(profileDir) {
     `--user-data-dir=${profileDir}`,
     "about:blank",
   ];
+  if (/^(1|true|yes)$/i.test(String(process.env.CHROME_NO_SANDBOX || ""))) {
+    args.splice(1, 0, "--no-sandbox");
+  }
+  return args;
 }
 
 class CdpClient {

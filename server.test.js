@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeGdebenzStation } from "./providers/gdebenz.js";
+import { normalizeMultigoStation } from "./providers/multigo.js";
 import { chromeArguments } from "./providers/sber-browser.js";
-import { mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices } from "./server.js";
+import { isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices } from "./server.js";
 
 test("starts the Sber Chromium worker without a GUI", () => {
   const args = chromeArguments("C:\\Temp\\benz-ai-sber-test");
@@ -10,6 +11,17 @@ test("starts the Sber Chromium worker without a GUI", () => {
   assert.ok(args.includes("--no-startup-window"));
   assert.ok(args.includes("--noerrdialogs"));
   assert.ok(!args.includes("--headless=new"));
+});
+
+test("enables Chromium's container flag only through explicit configuration", () => {
+  const previous = process.env.CHROME_NO_SANDBOX;
+  process.env.CHROME_NO_SANDBOX = "1";
+  try {
+    assert.ok(chromeArguments("/tmp/benz-ai-sber-test").includes("--no-sandbox"));
+  } finally {
+    if (previous === undefined) delete process.env.CHROME_NO_SANDBOX;
+    else process.env.CHROME_NO_SANDBOX = previous;
+  }
 });
 
 test("normalizes common fuel names", () => {
@@ -77,4 +89,28 @@ test("normalizes ГдеБЕНЗ status details", () => {
   assert.equal(station.overallStatus, "available");
   assert.equal(station.fuelStatus.DT, "available");
   assert.equal(station.confirmations, 4);
+});
+
+test("normalizes a Multigo place without claiming fuel availability", () => {
+  const station = normalizeMultigoStation({
+    id: "m1",
+    name: "ЭлЗС",
+    loc: [55.75, 37.61],
+    address: "Москва",
+    status: "Нормальное",
+    subCategory: { name: "ЭлЗС" },
+    fuels: [],
+    __dist: 620,
+  });
+  assert.equal(station.externalId, "m1");
+  assert.equal(station.lat, 55.75);
+  assert.equal(station.overallStatus, "no_data");
+  assert.deepEqual(station.availabilityBySource, {});
+  assert.equal(station.multigo.distanceMeters, 620);
+});
+
+test("checks only probable-availability stations with a Yandex card", () => {
+  assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: "123" }), true);
+  assert.equal(isYandexVerificationCandidate({ overallStatus: "maybe_available", yandexOrgId: "123" }), false);
+  assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: null }), false);
 });

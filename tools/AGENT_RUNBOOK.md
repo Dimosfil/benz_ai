@@ -23,8 +23,22 @@ npm test
 ## Build
 
 ```powershell
-# No build step is currently defined.
+docker compose build
 ```
+
+Release artifact: local OCI image `benz-ai:local`.
+
+## Docker Run
+
+```powershell
+docker compose up -d
+docker compose ps
+Invoke-RestMethod -Uri http://127.0.0.1:3000/api/health
+```
+
+The container runs as the non-root `node` user on a read-only root filesystem.
+Compose injects only the explicitly allowlisted Benz AI settings from ignored
+`.env`; no `.env` file is copied into the image.
 
 ## Smoke Check
 

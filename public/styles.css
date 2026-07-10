@@ -58,24 +58,27 @@ button:disabled{opacity:.6;cursor:wait}
 .table-button:hover:not(:disabled){background:#dce9df}
 .table-button:disabled{cursor:not-allowed}
 .reset-size{padding-inline:11px;font-size:.78rem}
-.table-wrap{position:relative;width:100%;height:min(65vh,640px);min-width:480px;min-height:240px;max-width:calc(100vw - 32px);max-height:85vh;resize:both;overflow:auto;scrollbar-gutter:stable both-edges;overscroll-behavior:contain;background:#fff;border:1px solid #dce5dd;border-radius:14px;box-shadow:0 8px 24px #1830200a;scrollbar-color:#9aaa9d #edf3ee;scrollbar-width:thin}
+.table-wrap{position:relative;width:100%;height:min(65vh,640px);min-width:480px;min-height:240px;max-width:calc(100vw - 32px);max-height:85vh;resize:both;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable both-edges;overscroll-behavior:contain;background:#fff;border:1px solid #dce5dd;border-radius:14px;box-shadow:0 8px 24px #1830200a;scrollbar-color:#9aaa9d #edf3ee;scrollbar-width:thin}
 .table-wrap:focus-visible{outline:3px solid #8fc5a0;outline-offset:2px}
 .table-wrap::-webkit-scrollbar{width:11px;height:11px}
 .table-wrap::-webkit-scrollbar-track{background:#edf3ee}
 .table-wrap::-webkit-scrollbar-thumb{background:#9aaa9d;border:3px solid #edf3ee;border-radius:999px}
-.station-table{width:100%;min-width:1160px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:.82rem}
+.station-table{width:100%;min-width:0;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:.78rem}
 .station-table th{position:sticky;z-index:2;top:0;background:#edf3ee;color:#435048;text-align:left;padding:0;border-bottom:1px solid #dce5dd;white-space:nowrap}
 .sort-button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;align-self:auto;padding:12px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;font-weight:800}
 .sort-button:hover{background:#e1ebe3}
 .sort-button:focus-visible{position:relative;z-index:3;outline:3px solid #73ad85;outline-offset:-3px}
 .sort-button span{color:#247443;font-size:.9rem}
-.station-table th:nth-child(1){width:220px}
-.station-table th:nth-child(2){width:120px}
-.station-table th:nth-child(3){width:120px}
-.station-table th:nth-child(4){width:250px}
-.station-table th:nth-child(5){width:250px}
-.station-table th:nth-child(6){width:200px}
-.station-table td{padding:12px;vertical-align:top;border-bottom:1px solid #edf0ed;overflow-wrap:anywhere;line-height:1.35}
+.station-table th[draggable]{cursor:grab}
+.station-table th.is-dragging{opacity:.45}
+.station-table th.is-drop-target{box-shadow:inset 4px 0 #247443}
+.station-table th[data-key="name"]{width:22%}
+.station-table th[data-key="sources"]{width:14%}
+.station-table th[data-key="status"]{width:12%}
+.station-table th[data-key="fuel"]{width:23%}
+.station-table th[data-key="price"]{width:18%}
+.station-table th[data-key="fresh"]{width:11%}
+.station-table td{padding:12px 10px;vertical-align:top;border-bottom:1px solid #edf0ed;overflow-wrap:anywhere;line-height:1.35}
 .station-table tr:last-child td{border-bottom:0}
 .station-table tbody tr:hover{background:#f8faf8}
 .station-table strong,.station-table small{display:block}
