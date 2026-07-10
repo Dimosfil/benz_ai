@@ -11,6 +11,7 @@ import {
 } from "./station-view.js";
 import { COLUMN_KEYS, moveColumnOrder, normalizeColumnOrder } from "./table-order.js";
 import { filterStations, normalizeSelectedFuels } from "./station-filter.js";
+import { fetchJson } from "./api-client.js";
 
 const locationInput = document.querySelector("#location");
 const fuel = document.querySelector("#fuel");
@@ -335,9 +336,7 @@ async function loadSummary({ refresh = false } = {}) {
   notice.hidden = true;
   try {
     const path = refresh ? "/api/cache/refresh" : "/api/summary";
-    const response = await fetch(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Не удалось получить сводку");
+    const data = await fetchJson(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
     allStations = data.stations;
     renderSummary(data);
     renderStations();
@@ -346,8 +345,11 @@ async function loadSummary({ refresh = false } = {}) {
     notice.hidden = !messages.length;
     notice.textContent = messages.join(" ");
   } catch (error) {
+    allStations = [];
+    overview.hidden = true;
+    renderStations();
     notice.hidden = false;
-    notice.textContent = error.message;
+    notice.textContent = error instanceof Error ? error.message : "Не удалось получить сводку.";
     count.textContent = "—";
     meta.textContent = "Сводка не получена";
   } finally {

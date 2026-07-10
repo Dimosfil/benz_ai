@@ -44,8 +44,14 @@ function fulfilled(result) {
   return result.status === "fulfilled" ? result.value : null;
 }
 
-function rejectionMessage(result, fallback) {
-  return result.status === "rejected" ? result.reason?.message || fallback : null;
+export function providerFailureMessage(result, source) {
+  if (result.status !== "rejected") return null;
+  const detail = String(result.reason?.message || "").trim();
+  if (!detail) return `${source}: источник временно недоступен.`;
+  if (/failed to fetch|fetch failed|network|econn|enotfound|etimedout/i.test(detail)) {
+    return `${source}: не удалось подключиться к источнику.`;
+  }
+  return `${source}: ${detail}`;
 }
 
 async function searchStations(bbox) {
@@ -71,23 +77,23 @@ async function searchStations(bbox) {
   if (tbank) {
     stations.push(...tbank.stations);
     if (tbank.truncated) warnings.push("Область очень велика: достигнут лимит запросов T-Bank, сводка может быть неполной.");
-  } else warnings.push(rejectionMessage(tbankResult, "Не удалось получить данные T-Bank."));
+  } else warnings.push(providerFailureMessage(tbankResult, "T-Bank"));
 
   if (sber) {
     stations.push(...sber.stations);
     if (sber.warning) warnings.push(sber.warning);
-  } else warnings.push(rejectionMessage(sberResult, "Не удалось получить данные Sber AZS."));
+  } else warnings.push(providerFailureMessage(sberResult, "Sber AZS"));
 
   if (benzup) {
     stations.push(...benzup.stations);
     if (benzup.warning) warnings.push(benzup.warning);
-  } else warnings.push(rejectionMessage(benzupResult, "Не удалось получить данные BenzUp."));
+  } else warnings.push(providerFailureMessage(benzupResult, "BenzUp"));
 
   if (gdebenz) stations.push(...gdebenz.stations);
-  else warnings.push(rejectionMessage(gdebenzResult, "Не удалось получить данные ГдеБЕНЗ."));
+  else warnings.push(providerFailureMessage(gdebenzResult, "ГдеБЕНЗ"));
 
   if (multigo) stations.push(...multigo.stations);
-  else warnings.push(rejectionMessage(multigoResult, "Не удалось получить данные Multigo."));
+  else warnings.push(providerFailureMessage(multigoResult, "Multigo"));
 
   const merged = mergeStations(stations);
   const yandex = await enrichYandexPrices(merged);
@@ -109,7 +115,7 @@ async function searchStations(bbox) {
         available: Boolean(tbank),
         configured: true,
         role: "availability",
-        error: rejectionMessage(tbankResult, "T-Bank недоступен"),
+        error: providerFailureMessage(tbankResult, "T-Bank"),
       },
       sber: {
         available: Boolean(sber?.available),
@@ -117,13 +123,13 @@ async function searchStations(bbox) {
         role: "availability",
         refreshedAt: sber?.fetchedAt ? new Date(sber.fetchedAt).toISOString() : null,
         refreshSeconds: config.sber.refreshMs / 1000,
-        error: rejectionMessage(sberResult, "Sber AZS недоступен"),
+        error: providerFailureMessage(sberResult, "Sber AZS"),
       },
       benzup: {
         available: Boolean(benzup?.available),
         configured: Boolean(benzup?.configured),
         role: "prices",
-        error: rejectionMessage(benzupResult, "BenzUp недоступен"),
+        error: providerFailureMessage(benzupResult, "BenzUp"),
       },
       yandex: {
         available: config.yandex.enabled && yandex.checked > 0,
@@ -142,7 +148,7 @@ async function searchStations(bbox) {
         returned: gdebenz?.returned || 0,
         included: gdebenz?.stations.length || 0,
         droppedOutside: gdebenz?.droppedOutside || 0,
-        error: rejectionMessage(gdebenzResult, "ГдеБЕНЗ недоступен"),
+        error: providerFailureMessage(gdebenzResult, "ГдеБЕНЗ"),
       },
       multigo: {
         available: Boolean(multigo?.available),
@@ -153,7 +159,7 @@ async function searchStations(bbox) {
         included: multigo?.stations.length || 0,
         droppedOutside: multigo?.droppedOutside || 0,
         droppedElectric: multigo?.droppedElectric || 0,
-        error: rejectionMessage(multigoResult, "Multigo недоступен"),
+        error: providerFailureMessage(multigoResult, "Multigo"),
       },
     },
   };
