@@ -79,16 +79,46 @@ function formatStation(station, number) {
     const priceText = Number.isFinite(price) ? ` · ${price.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽` : "";
     return `${fuel}: ${statusText[status] || status}${priceText}`;
   });
-  const sources = [...new Set((station.sourceRefs || []).map((item) => sourceText[item.source] || item.source))];
+  const sourceEvidence = formatSourceEvidence(station);
   const address = String(station.address || "Адрес не указан").replace(/^Россия,\s*/i, "");
   const observedAt = formatObservedAt(station.lastTransactionAt);
+  const fuelStatuses = Object.values(station.fuelStatus || {});
+  const stationOnlyStatus = station.overallStatus !== "no_data"
+    && fuelStatuses.length > 0
+    && fuelStatuses.every((status) => status === "no_data");
   return [
     `${number}. ${statusText[station.overallStatus] || "⚪ нет данных"} — ${station.name || "АЗС"}`,
     `📍 ${address}`,
     fuels.length ? `⛽ ${fuels.join("; ")}` : "⛽ Данные по видам топлива отсутствуют",
+    stationOnlyStatus ? "ℹ️ Общий статус относится ко всей АЗС; по отдельным видам топлива данных нет." : "",
     observedAt ? `🕒 Данные: ${observedAt}` : "",
-    sources.length ? `Источники: ${sources.join(", ")}` : "",
+    sourceEvidence ? `Сигналы: ${sourceEvidence}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function formatSourceEvidence(station) {
+  const evidence = station.availabilityBySource || {};
+  const refs = [...new Set((station.sourceRefs || []).map((item) => item.source))];
+  return refs.map((source) => {
+    const name = sourceText[source] || source;
+    const signal = evidence[source];
+    if (!signal) {
+      if (source === "multigo") return `${name} — только карточка АЗС`;
+      if (source === "yandex") return `${name} — цены, не наличие`;
+      if (source === "benzup") return `${name} — каталог и цены`;
+      return `${name} — без сигнала наличия`;
+    }
+
+    const details = [];
+    if (signal.detail) details.push(`«${signal.detail}»`);
+    if (Number.isFinite(Number(signal.operationsCount))) details.push(`${Number(signal.operationsCount)} операций`);
+    if (Number.isFinite(Number(signal.confirmations))) details.push(`${Number(signal.confirmations)} подтверждений`);
+    if (Number.isFinite(Number(signal.confidence)) && Number(signal.confidence) > 0) {
+      details.push(`уверенность ${Math.round(Number(signal.confidence) * 100)}%`);
+    }
+    const label = statusText[signal.overallStatus]?.replace(/^[^\p{L}]+/u, "") || "нет данных";
+    return `${name} — ${label}${details.length ? ` (${details.join(", ")})` : ""}`;
+  }).join("; ");
 }
 
 function formatObservedAt(value) {

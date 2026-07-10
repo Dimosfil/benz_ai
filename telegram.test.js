@@ -62,6 +62,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       fuelStatus: { 95: "available" },
       prices: { 95: { value: 70.59 } },
       sourceRefs: [{ source: "tbank" }, { source: "yandex" }],
+      availabilityBySource: { tbank: { overallStatus: "available", fuelStatus: { 95: "available" } } },
       lastTransactionAt: "2026-07-10T18:54:42.917Z",
     }],
   });
@@ -69,6 +70,34 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /Татнефть/);
   assert.match(text, /Тестовая улица, 1/);
   assert.match(text, /70,59 ₽/);
-  assert.match(text, /T‑Bank, Яндекс/);
+  assert.match(text, /T‑Bank — вероятно есть/);
+  assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
+});
+
+test("explains a station-wide negative report separately from empty fuel statuses", () => {
+  const text = formatTelegramSummary({
+    location: { name: "Бабяково" },
+    summary: { total: 1, withPrices: 0, statuses: { available: 0, maybe_available: 0 }, fuels: {} },
+    warnings: [],
+    stations: [{
+      name: "Газпром",
+      address: "Россия, Воронежская область, село Бабяково",
+      overallStatus: "not_available",
+      fuelStatus: { 92: "no_data", DT: "no_data" },
+      prices: {},
+      sourceRefs: [{ source: "tbank" }, { source: "sber" }, { source: "gdebenz" }, { source: "multigo" }],
+      availabilityBySource: {
+        tbank: { overallStatus: "no_data", fuelStatus: { 92: "no_data" } },
+        sber: { overallStatus: "no_data", fuelStatus: {}, operationsCount: 0 },
+        gdebenz: { overallStatus: "not_available", fuelStatus: {}, detail: "Заправка не работает", confirmations: 8, confidence: 0.7435 },
+      },
+      lastTransactionAt: "2026-07-10T15:46:32.000Z",
+    }],
+  });
+  assert.match(text, /Общий статус относится ко всей АЗС/);
+  assert.match(text, /T‑Bank — нет данных/);
+  assert.match(text, /Sber — нет данных \(0 операций\)/);
+  assert.match(text, /ГдеБЕНЗ — вероятно нет \(«Заправка не работает», 8 подтверждений, уверенность 74%\)/);
+  assert.match(text, /Multigo — только карточка АЗС/);
 });
