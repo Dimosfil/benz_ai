@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Benz AI — поиск топлива</title><link rel="stylesheet" href="/styles.css"></head>
+  <body>
+    <main>
+      <header><p class="eyebrow">BENZ AI</p><h1>Где есть бензин</h1><p class="subtitle">Агрегатор доступности топлива на АЗС</p></header>
+      <form id="search-form" class="controls" aria-label="Параметры поиска">
+        <label class="location">Город или область <input id="location" value="Воронеж" autocomplete="address-level1" placeholder="Например, Воронежская область" required></label>
+        <fieldset class="fuel-picker"><legend>Топливо</legend><details id="fuel"><summary id="fuel-label">Любое</summary><div class="fuel-options"><label><input id="fuel-any" type="checkbox" value="" checked> Любое</label><label><input type="checkbox" value="92"> АИ‑92</label><label><input type="checkbox" value="95"> АИ‑95</label><label><input type="checkbox" value="98"> АИ‑98</label><label><input type="checkbox" value="100"> АИ‑100</label><label><input type="checkbox" value="DT"> ДТ</label><label><input type="checkbox" value="LPG"> Пропан</label><label><input type="checkbox" value="CNG"> Метан</label></div></details></fieldset>
+        <fieldset class="status-picker"><legend>Статус</legend><details id="status"><summary id="status-label">Все статусы</summary><div class="filter-options"><label><input id="status-any" type="checkbox" value="" checked> Все статусы</label><label><input type="checkbox" value="available"> Вероятно есть</label><label><input type="checkbox" value="maybe_available"> Возможно есть</label><label><input type="checkbox" value="not_available"> Вероятно нет</label><label><input type="checkbox" value="no_data"> Нет данных</label></div></details></fieldset>
+        <label class="search">Название или адрес АЗС <input id="query" type="search" placeholder="Например, Лукойл"></label>
+        <button id="find" type="submit">Получить сводку</button>
+        <button id="refresh-cache" class="secondary" type="button">Обновить весь кэш</button>
+      </form>
+      <section id="notice" class="notice" hidden></section>
+      <section id="overview" hidden>
+        <div class="place"><p class="eyebrow">НАЙДЕННАЯ ТЕРРИТОРИЯ</p><h2 id="place-name"></h2><p id="place-meta"></p></div>
+        <div id="summary-cards" class="summary-cards"></div>
+        <div id="source-status" class="source-status" aria-label="Состояние источников"></div>
+        <div class="breakdown">
+          <section><h3>По видам топлива</h3><div id="fuel-summary"></div></section>
+          <section><h3>Частые названия АЗС</h3><div id="brand-summary" class="brands"></div></section>
+        </div>
+      </section>
+      <section class="summary"><strong id="count">—</strong><span id="meta">Введите город или область</span></section>
+      <div class="table-toolbar" aria-label="Управление таблицей">
+        <div class="table-info"><span id="page-summary">Нет данных</span><span class="resize-hint">Размер: потяните правый нижний угол</span></div>
+        <div class="page-controls">
+          <label>Строк на странице <select id="page-size"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+          <button id="table-reset-size" class="table-button reset-size" type="button" title="Вернуть стандартный размер таблицы">Сбросить размер</button>
+          <button id="page-prev" class="table-button" type="button" aria-label="Предыдущая страница">←</button>
+          <span id="page-number">1 / 1</span>
+          <button id="page-next" class="table-button" type="button" aria-label="Следующая страница">→</button>
+        </div>
+      </div>
+      <div class="table-wrap" tabindex="0" aria-label="Таблица автозаправочных станций. Размер изменяется за правый нижний угол" aria-live="polite">
+        <table class="station-table">
+          <thead><tr><th data-key="name" aria-sort="ascending"><button class="sort-button" type="button">АЗС <span>↑</span></button></th><th data-key="sources" aria-sort="none"><button class="sort-button" type="button">Источники <span>↕</span></button></th><th data-key="status" aria-sort="none"><button class="sort-button" type="button">Наличие <span>↕</span></button></th><th data-key="fuel" aria-sort="none"><button class="sort-button" type="button">Топливо <span>↕</span></button></th><th data-key="price" aria-sort="none"><button class="sort-button" type="button">Цены <span>↕</span></button></th><th data-key="fresh" aria-sort="none"><button class="sort-button" type="button">Свежесть <span>↕</span></button></th></tr></thead>
+          <tbody id="station-rows"></tbody>
+        </table>
+      </div>
+      <section id="results" class="results" aria-live="polite"></section>
+      <footer id="attribution"></footer>
+    </main>
+    <template id="station"><article class="station"><div><p class="source"></p><h2></h2><p class="address"></p><p class="detail"></p><a class="station-link" target="_blank" rel="noreferrer" hidden>Открыть карту</a></div><div class="right"><span class="badge"></span><p class="fuel"></p><p class="prices"></p><p class="fresh"></p></div></article></template>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

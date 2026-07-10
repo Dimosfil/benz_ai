@@ -1,45 +1,38 @@
 # Technology Stack
 
-Last reviewed: 2026-06-21
+## Runtime
 
-This file is the repository's canonical project documentation for stack facts.
-Business rules, feature algorithms, workflow contracts, and verification
-guarantees belong in project memory specs, not in this stack inventory.
+| Layer | Technology | Evidence |
+| --- | --- | --- |
+| Server | Node.js ES modules, built-in HTTP server and Fetch API | `server.js`, `package.json` |
+| Frontend | Static HTML, CSS and browser JavaScript | `public/` |
+| Browser integration | Headless Chrome/Edge via Chrome DevTools Protocol | `providers/sber-browser.js` |
+| Package manager | npm | `package.json` |
+| Tests | Node.js test runner | `npm test` |
+| Build | No build step | `package.json`, `tools/AGENT_RUNBOOK.md` |
 
-## Summary
+## External services
 
-- Primary stack: Markdown instruction library with PowerShell and Python helper
-  scripts for project-memory and update workflows.
-- Runtime model: source repository for reusable GI rules, templates, migrations,
-  and project-memory tooling.
-- Current confidence: confirmed from repository files.
-
-## Components
-
-| Layer | Technology | Evidence | Notes |
-| --- | --- | --- | --- |
-| Documentation/runtime | Markdown instruction kit | `AGENTS.md`, `COMMANDS.md`, `patterns/`, `templates/`, `migrations/` | This repository is the canonical GI source. |
-| Agent tooling | PowerShell | `templates/agent-start.template.ps1`, `templates/check-instruction-kit-updates.template.ps1` | Templates are copied into consuming projects. |
-| Project memory tooling | Python | `tools/project-memory/build_project_memory_index.py`, `tools/project-memory/build_chroma_index.py`, `tools/project-memory/rag_check.py` | Used for optional SQLite, semantic corpus, Chroma, and RAG checks. |
-| Storage/indexes | SQLite, JSONL, Chroma-compatible local vector index | `tools/project-memory/project_memory.sqlite`, `tools/project-memory/semantic-corpus.jsonl`, `tools/project-memory/vector-index/` | Generated/rebuildable local project-memory artifacts. |
-| Templates | Markdown, JSON, PowerShell | `templates/` | Source templates for copied instruction kits. |
-| Versioning | Git, migration files | `VERSION.md`, `CHANGELOG.md`, `migrations/` | Accepted instruction-kit updates are migration-driven. |
+| Service | Role | Access |
+| --- | --- | --- |
+| OpenStreetMap Nominatim | Territory geocoding | Public endpoint with identifying User-Agent and rate limit |
+| T-Bank Fuel | Stations and probabilistic availability | Public, undocumented endpoint |
+| BenzUp | Station catalog and prices | Bearer token |
+| Yandex Maps | Station card links and optional prices | Optional HTML lookup; disabled by default |
+| Sber AZS | Station catalog and availability | JSON verified in Chromium session; direct requests receive JS challenge |
+| ГдеБЕНЗ | Crowdsourced availability, queues and limits | User-triggered request with 60-second cache |
 
 ## Commands
 
-| Purpose | Command | Evidence |
-| --- | --- | --- |
-| Check git state | `git status --short --branch` | Repository workflow rules |
-| Validate JSON metadata | `Get-Content -Raw .\tools\project-memory\instruction-kit.json \| ConvertFrom-Json` | Instruction-kit metadata |
-| Validate whitespace | `git diff --check` | Coherent batch verification |
+- Install: `npm install`
+- Run: `npm start`
+- Development: `npm run dev`
+- Test: `npm test`
 
-## External Services
+## Open gaps
 
-| Service | Role | Evidence | Boundary |
-| --- | --- | --- | --- |
-| GitHub repository | Canonical shared instruction distribution | `tools/project-memory/instruction-kit.json` `source_repo` | Public source of GI artifacts; do not store secrets in instructions. |
-
-## Gaps
-
-- No application runtime is expected for this repository; app stack fields are
-  intentionally scoped to instruction-kit tooling.
+- Obtain and verify the BenzUp response contract with a real token.
+- Obtain a documented Sber AZS partner API.
+- Replace optional Yandex HTML parsing with written API permission or a
+  documented price endpoint before public deployment.
+- Monitor Sber browser-worker resource use and anti-bot contract stability.

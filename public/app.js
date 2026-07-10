@@ -1,0 +1,408 @@
+const locationInput = document.querySelector("#location");
+const fuel = document.querySelector("#fuel");
+const fuelAny = document.querySelector("#fuel-any");
+const fuelInputs = [...fuel.querySelectorAll('input[type="checkbox"]:not(#fuel-any)')];
+const status = document.querySelector("#status");
+const statusAny = document.querySelector("#status-any");
+const statusInputs = [...status.querySelectorAll('input[type="checkbox"]:not(#status-any)')];
+const query = document.querySelector("#query");
+const results = document.querySelector("#results");
+const stationRows = document.querySelector("#station-rows");
+const pageSizeSelect = document.querySelector("#page-size");
+const pagePrev = document.querySelector("#page-prev");
+const pageNext = document.querySelector("#page-next");
+const pageNumber = document.querySelector("#page-number");
+const pageSummary = document.querySelector("#page-summary");
+const tableWrap = document.querySelector(".table-wrap");
+const tableResetSize = document.querySelector("#table-reset-size");
+const notice = document.querySelector("#notice");
+const count = document.querySelector("#count");
+const meta = document.querySelector("#meta");
+const template = document.querySelector("#station");
+const overview = document.querySelector("#overview");
+const findButton = document.querySelector("#find");
+const refreshButton = document.querySelector("#refresh-cache");
+let allStations = [];
+let currentPage = 1;
+let pageSize = Number(pageSizeSelect.value);
+let sortKey = "name";
+let sortDirection = 1;
+let pendingTableScroll = null;
+let saveTimer = null;
+let lastTableSize = null;
+
+const UI_STATE_KEY = "benz-ai.ui.v1";
+const sortKeys = new Set(["name", "sources", "status", "fuel", "price", "fresh"]);
+
+const labels = { available: "Вероятно есть", maybe_available: "Возможно есть", not_available: "Вероятно нет", no_data: "Нет данных" };
+const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
+const sourceNames = { tbank: "T‑Bank Fuel", sber: "Sber AZS", gdebenz: "ГдеБЕНЗ", benzup: "BenzUp", yandex: "Яндекс Карты" };
+const fuelNames = { DT: "ДТ", LPG: "Пропан", CNG: "Метан" };
+
+function saveUIState() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  try {
+    const bounds = tableWrap.getBoundingClientRect();
+    if (bounds.width >= 480 && bounds.height >= 240) {
+      lastTableSize = { width: Math.round(bounds.width), height: Math.round(bounds.height) };
+    }
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      location: locationInput.value,
+      query: query.value,
+      fuels: selectedFuels(),
+      statuses: selectedStatuses(),
+      pageSize,
+      currentPage,
+      sortKey,
+      sortDirection,
+      fuelOpen: fuel.open,
+      statusOpen: status.open,
+      table: {
+        ...lastTableSize,
+        scrollLeft: Math.round(tableWrap.scrollLeft),
+        scrollTop: Math.round(tableWrap.scrollTop),
+      },
+    }));
+  } catch {}
+}
+
+function scheduleSaveUIState() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveUIState, 120);
+}
+
+function restoreUIState() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(UI_STATE_KEY)); } catch {}
+  if (!saved || typeof saved !== "object") return;
+  if (typeof saved.location === "string" && saved.location.trim()) locationInput.value = saved.location;
+  if (typeof saved.query === "string") query.value = saved.query;
+  if (Array.isArray(saved.fuels)) {
+    fuelInputs.forEach((input) => { input.checked = saved.fuels.includes(input.value); });
+    fuelAny.checked = saved.fuels.length === 0;
+  }
+  if (Array.isArray(saved.statuses)) {
+    statusInputs.forEach((input) => { input.checked = saved.statuses.includes(input.value); });
+    statusAny.checked = saved.statuses.length === 0;
+  }
+  if ([10, 25, 50, 100].includes(Number(saved.pageSize))) {
+    pageSize = Number(saved.pageSize);
+    pageSizeSelect.value = String(pageSize);
+  }
+  if (Number.isInteger(saved.currentPage) && saved.currentPage > 0) currentPage = saved.currentPage;
+  if (sortKeys.has(saved.sortKey)) sortKey = saved.sortKey;
+  sortDirection = saved.sortDirection === -1 ? -1 : 1;
+  fuel.open = Boolean(saved.fuelOpen);
+  status.open = Boolean(saved.statusOpen);
+  if (saved.table && typeof saved.table === "object") {
+    lastTableSize = {
+      width: Number(saved.table.width) || null,
+      height: Number(saved.table.height) || null,
+    };
+    const maxWidth = Math.max(480, window.innerWidth - tableWrap.getBoundingClientRect().left - 16);
+    if (Number(saved.table.width) >= 480) tableWrap.style.width = `${Math.min(Number(saved.table.width), maxWidth)}px`;
+    if (Number(saved.table.height) >= 240) tableWrap.style.height = `${Math.min(Number(saved.table.height), window.innerHeight * 0.85)}px`;
+    pendingTableScroll = {
+      left: Math.max(0, Number(saved.table.scrollLeft) || 0),
+      top: Math.max(0, Number(saved.table.scrollTop) || 0),
+    };
+  }
+}
+
+function fuelName(type) {
+  return fuelNames[type] || `АИ‑${type}`;
+}
+
+function selectedFuels() {
+  return fuelInputs.filter((input) => input.checked).map((input) => input.value);
+}
+
+function selectionStatus(station, selected) {
+  if (!selected.length) return station.overallStatus;
+  const values = selected.map((type) => station.fuelStatus[type]).filter(Boolean);
+  if (!values.length) return "no_data";
+  return new Set(values).size === 1 ? values[0] : "maybe_available";
+}
+
+function updateFuelPicker(changed) {
+  if (changed === fuelAny && fuelAny.checked) fuelInputs.forEach((input) => { input.checked = false; });
+  if (changed !== fuelAny && changed?.checked) fuelAny.checked = false;
+  if (!fuelInputs.some((input) => input.checked)) fuelAny.checked = true;
+  const selected = selectedFuels();
+  document.querySelector("#fuel-label").textContent = selected.length ? selected.map(fuelName).join(", ") : "Любое";
+}
+
+function selectedStatuses() {
+  return statusInputs.filter((input) => input.checked).map((input) => input.value);
+}
+
+function updateStatusPicker(changed) {
+  if (changed === statusAny && statusAny.checked) statusInputs.forEach((input) => { input.checked = false; });
+  if (changed !== statusAny && changed?.checked) statusAny.checked = false;
+  if (!statusInputs.some((input) => input.checked)) statusAny.checked = true;
+  const selected = selectedStatuses();
+  document.querySelector("#status-label").textContent = selected.length ? selected.map((value) => labels[value]).join(", ") : "Все статусы";
+}
+
+function stationSources(station) {
+  return (station.sourceRefs || [{ source: station.source }]).map((ref) => sourceNames[ref.source] || ref.source).join(" + ");
+}
+
+function stationFuelText(station, selected = []) {
+  const entries = selected.length ? selected.map((type) => [type, station.fuelStatus[type] || "no_data"]) : Object.entries(station.fuelStatus);
+  return entries.sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
+    .map(([type, value]) => `${fuelName(type)}: ${labels[value] || value}`).join(" · ") || "По видам топлива данных нет";
+}
+
+function stationPriceText(station) {
+  return Object.entries(station.prices || {}).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
+    .map(([type, price]) => `${fuelName(type)} — ${Number(price.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`)
+    .join(" · ") || "Цены не опубликованы";
+}
+
+function stationFreshText(station) {
+  const availabilityTime = station.lastTransactionAt ? `Наличие: ${formatter.format(new Date(station.lastTransactionAt))}` : "Время проверки неизвестно";
+  return station.priceUpdatedAt ? `${availabilityTime} · цены: ${station.priceUpdatedAt}` : availabilityTime;
+}
+
+function badge(statusValue) {
+  const value = statusValue || "no_data";
+  const element = document.createElement("span");
+  element.className = `badge ${value}`;
+  element.textContent = labels[value] || "Нет данных";
+  return element;
+}
+
+function minimumPrice(station) {
+  const prices = Object.values(station.prices || {}).map((price) => Number(price.value)).filter(Number.isFinite);
+  return prices.length ? Math.min(...prices) : null;
+}
+
+function sortValue(station, key, selectedFuel) {
+  if (key === "name") return `${station.name} ${station.address}`;
+  if (key === "sources") return stationSources(station);
+  if (key === "status") return ({ available: 1, maybe_available: 2, no_data: 3, not_available: 4 })[selectionStatus(station, selectedFuel)] || 5;
+  if (key === "fuel") return stationFuelText(station, selectedFuel);
+  if (key === "price") return minimumPrice(station);
+  if (key === "fresh") return station.lastTransactionAt ? Date.parse(station.lastTransactionAt) : null;
+  return "";
+}
+
+function sortStations(stations, selectedFuel) {
+  return [...stations].sort((left, right) => {
+    const a = sortValue(left, sortKey, selectedFuel);
+    const b = sortValue(right, sortKey, selectedFuel);
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    if (typeof a === "number" && typeof b === "number") return (a - b) * sortDirection;
+    return String(a).localeCompare(String(b), "ru", { numeric: true, sensitivity: "base" }) * sortDirection;
+  });
+}
+
+function updateSortUI() {
+  document.querySelectorAll(".station-table th[data-key]").forEach((header) => {
+    const active = header.dataset.key === sortKey;
+    header.setAttribute("aria-sort", active ? (sortDirection === 1 ? "ascending" : "descending") : "none");
+    header.querySelector("span").textContent = active ? (sortDirection === 1 ? "↑" : "↓") : "↕";
+  });
+}
+
+function metric(value, label) {
+  const card = document.createElement("div");
+  card.className = "metric";
+  const strong = document.createElement("strong");
+  const span = document.createElement("span");
+  strong.textContent = value;
+  span.textContent = label;
+  card.append(strong, span);
+  return card;
+}
+
+function renderSummary(data) {
+  overview.hidden = false;
+  document.querySelector("#place-name").textContent = data.location.name;
+  document.querySelector("#place-meta").textContent = data.location.displayName;
+  const summary = data.summary;
+  document.querySelector("#summary-cards").replaceChildren(
+    metric(summary.total, "АЗС найдено"),
+    metric(summary.statuses.available, "вероятно есть топливо"),
+    metric(summary.statuses.maybe_available, "возможно есть"),
+    metric(summary.withPrices, "АЗС с ценами"),
+  );
+  const sourceStatus = Object.entries(data.sources || {}).map(([name, state]) => {
+    const item = document.createElement("span");
+    item.className = `source-chip ${state.available ? "is-active" : "is-inactive"}`;
+    const refresh = state.refreshSeconds ? ` · каждые ${state.refreshSeconds} с` : "";
+    item.textContent = `${sourceNames[name] || name}: ${state.available ? "работает" : state.configured ? "недоступен" : "не подключён"}${refresh}`;
+    item.title = [state.refreshedAt && `Обновлено: ${state.refreshedAt}`, state.error].filter(Boolean).join("\n");
+    return item;
+  });
+  document.querySelector("#source-status").replaceChildren(...sourceStatus);
+  const fuelRows = Object.entries(summary.fuels).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true })).map(([type, values]) => {
+    const row = document.createElement("div");
+    row.className = "fuel-row";
+    const name = document.createElement("strong");
+    const details = document.createElement("span");
+    name.textContent = fuelName(type);
+    details.textContent = `${values.available} есть · ${values.maybe_available} возможно · ${values.not_available} нет · ${values.no_data} без данных`;
+    row.append(name, details);
+    return row;
+  });
+  document.querySelector("#fuel-summary").replaceChildren(...fuelRows);
+  const brands = summary.brands.map(({ name, count }) => {
+    const chip = document.createElement("span");
+    chip.className = "brand";
+    chip.textContent = `${name} · ${count}`;
+    return chip;
+  });
+  document.querySelector("#brand-summary").replaceChildren(...brands);
+  document.querySelector("#attribution").textContent = `Геокодирование: ${data.location.attribution}. Доступность топлива носит вероятностный характер.`;
+}
+
+function renderStations() {
+  const selectedFuel = selectedFuels();
+  const selectedStatus = selectedStatuses();
+  const text = query.value.trim().toLocaleLowerCase("ru-RU");
+  const filtered = allStations.filter((station) => {
+    const hasSelectedFuel = !selectedFuel.length || selectedFuel.some((type) => station.fuelStatus[type]);
+    const actualStatus = selectionStatus(station, selectedFuel);
+    return hasSelectedFuel && (!selectedStatus.length || selectedStatus.includes(actualStatus)) && (!text || `${station.name} ${station.address}`.toLocaleLowerCase("ru-RU").includes(text));
+  });
+  const sorted = sortStations(filtered, selectedFuel);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  currentPage = Math.min(currentPage, totalPages);
+  const firstIndex = (currentPage - 1) * pageSize;
+  const visible = sorted.slice(firstIndex, firstIndex + pageSize);
+  count.textContent = filtered.length;
+  meta.textContent = `из ${allStations.length} АЗС · страница ${currentPage} из ${totalPages}`;
+  pageSummary.textContent = filtered.length ? `Показаны ${firstIndex + 1}–${firstIndex + visible.length} из ${filtered.length}` : "По выбранным фильтрам ничего не найдено";
+  pageNumber.textContent = `${currentPage} / ${totalPages}`;
+  pagePrev.disabled = currentPage <= 1;
+  pageNext.disabled = currentPage >= totalPages;
+  const rows = visible.map((station) => {
+    const row = document.createElement("tr");
+    const stationCell = document.createElement("td");
+    const name = document.createElement("strong");
+    const address = document.createElement("small");
+    name.textContent = station.name;
+    address.textContent = station.address;
+    stationCell.append(name, address);
+    const sourcesCell = document.createElement("td");
+    sourcesCell.textContent = stationSources(station);
+    const statusCell = document.createElement("td");
+    statusCell.append(badge(selectionStatus(station, selectedFuel)));
+    const fuelCell = document.createElement("td");
+    fuelCell.textContent = stationFuelText(station, selectedFuel);
+    const priceCell = document.createElement("td");
+    priceCell.textContent = stationPriceText(station);
+    const freshCell = document.createElement("td");
+    freshCell.textContent = stationFreshText(station);
+    row.append(stationCell, sourcesCell, statusCell, fuelCell, priceCell, freshCell);
+    return row;
+  });
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "empty-row";
+    cell.textContent = "Нет АЗС, соответствующих выбранным фильтрам";
+    row.append(cell);
+    rows.push(row);
+  }
+  stationRows.replaceChildren(...rows);
+  updateSortUI();
+  results.replaceChildren(...visible.map((station) => {
+    const node = template.content.cloneNode(true);
+    const actualStatus = selectionStatus(station, selectedFuel);
+    node.querySelector(".source").textContent = stationSources(station);
+    node.querySelector("h2").textContent = station.name;
+    node.querySelector(".address").textContent = station.address;
+    const badgeElement = node.querySelector(".badge");
+    badgeElement.replaceWith(badge(actualStatus));
+    node.querySelector(".fuel").textContent = stationFuelText(station, selectedFuel);
+    node.querySelector(".prices").textContent = stationPriceText(station);
+    node.querySelector(".detail").textContent = station.detail || "";
+    const link = node.querySelector(".station-link");
+    const mapLink = station.links?.yandex || station.links?.twoGis;
+    if (mapLink) { link.href = mapLink; link.hidden = false; }
+    node.querySelector(".fresh").textContent = stationFreshText(station);
+    return node;
+  }));
+  if (pendingTableScroll) {
+    requestAnimationFrame(() => {
+      tableWrap.scrollTo(pendingTableScroll);
+      pendingTableScroll = null;
+      scheduleSaveUIState();
+    });
+  } else {
+    scheduleSaveUIState();
+  }
+}
+
+async function loadSummary({ refresh = false } = {}) {
+  findButton.disabled = true;
+  refreshButton.disabled = true;
+  meta.textContent = refresh ? "Очищаем кэш и заново опрашиваем источники…" : "Определяем территорию и собираем АЗС…";
+  notice.hidden = true;
+  try {
+    const path = refresh ? "/api/cache/refresh" : "/api/summary";
+    const response = await fetch(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Не удалось получить сводку");
+    allStations = data.stations;
+    renderSummary(data);
+    renderStations();
+    const messages = [...(data.warnings || [])];
+    if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
+    notice.hidden = !messages.length;
+    notice.textContent = messages.join(" ");
+  } catch (error) {
+    notice.hidden = false;
+    notice.textContent = error.message;
+    count.textContent = "—";
+    meta.textContent = "Сводка не получена";
+  } finally {
+    findButton.disabled = false;
+    refreshButton.disabled = false;
+  }
+}
+
+async function search(event) {
+  event?.preventDefault();
+  currentPage = 1;
+  scheduleSaveUIState();
+  await loadSummary();
+}
+
+document.querySelector("#search-form").addEventListener("submit", search);
+refreshButton.addEventListener("click", () => loadSummary({ refresh: true }));
+fuel.addEventListener("change", (event) => { updateFuelPicker(event.target); currentPage = 1; renderStations(); });
+status.addEventListener("change", (event) => { updateStatusPicker(event.target); currentPage = 1; renderStations(); });
+query.addEventListener("input", () => { currentPage = 1; renderStations(); });
+locationInput.addEventListener("input", scheduleSaveUIState);
+pageSizeSelect.addEventListener("change", () => { pageSize = Number(pageSizeSelect.value); currentPage = 1; renderStations(); });
+pagePrev.addEventListener("click", () => { if (currentPage > 1) { currentPage -= 1; renderStations(); tableWrap.scrollTop = 0; } });
+pageNext.addEventListener("click", () => { currentPage += 1; renderStations(); tableWrap.scrollTop = 0; });
+document.querySelectorAll(".sort-button").forEach((button) => button.addEventListener("click", () => {
+  const key = button.closest("th").dataset.key;
+  if (sortKey === key) sortDirection *= -1;
+  else { sortKey = key; sortDirection = 1; }
+  currentPage = 1;
+  renderStations();
+}));
+tableResetSize.addEventListener("click", () => {
+  tableWrap.style.removeProperty("width");
+  tableWrap.style.removeProperty("height");
+  scheduleSaveUIState();
+});
+tableWrap.addEventListener("scroll", scheduleSaveUIState, { passive: true });
+fuel.addEventListener("toggle", scheduleSaveUIState);
+status.addEventListener("toggle", scheduleSaveUIState);
+window.addEventListener("pagehide", saveUIState);
+restoreUIState();
+updateFuelPicker();
+updateStatusPicker();
+new ResizeObserver(scheduleSaveUIState).observe(tableWrap);
+loadSummary();
