@@ -15,6 +15,9 @@ export class TelegramPollingGateway {
     this.offset = 0;
     this.polling = false;
     this.lastError = null;
+    this.lastPollAt = null;
+    this.lastUpdateAt = null;
+    this.processedUpdates = 0;
     this.abortController = null;
     this.loopPromise = null;
   }
@@ -28,6 +31,9 @@ export class TelegramPollingGateway {
       enabled: this.polling,
       configured: this.isConfigured(),
       lastError: this.lastError,
+      lastPollAt: this.lastPollAt,
+      lastUpdateAt: this.lastUpdateAt,
+      processedUpdates: this.processedUpdates,
     };
   }
 
@@ -52,7 +58,11 @@ export class TelegramPollingGateway {
       offset: this.offset,
       timeout: this.longPollSeconds,
       allowed_updates: ["message"],
-    }, this.abortController.signal);
+    }, combinedSignal(
+      this.abortController.signal,
+      AbortSignal.timeout((this.longPollSeconds + 20) * 1_000),
+    ));
+    this.lastPollAt = new Date().toISOString();
 
     for (const update of updates) {
       this.offset = Number(update.update_id) + 1;
@@ -69,12 +79,14 @@ export class TelegramPollingGateway {
       username: message.from?.username ?? message.from?.first_name ?? null,
       text: message.text,
     });
+    this.lastUpdateAt = new Date().toISOString();
+    this.processedUpdates += 1;
     if (!responseText) return;
     await this.call("sendMessage", {
       chat_id: String(message.chat.id),
       text: String(responseText).slice(0, 4096),
       disable_web_page_preview: true,
-    });
+    }, AbortSignal.timeout(20_000));
   }
 
   async pollLoop() {
@@ -107,4 +119,8 @@ export class TelegramPollingGateway {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function combinedSignal(...signals) {
+  return typeof AbortSignal.any === "function" ? AbortSignal.any(signals) : signals[0];
 }

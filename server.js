@@ -86,7 +86,7 @@ async function searchStations(bbox) {
 
   if (benzup) {
     stations.push(...benzup.stations);
-    if (benzup.warning) warnings.push(benzup.warning);
+    if (benzup.configured && benzup.warning) warnings.push(benzup.warning);
   } else warnings.push(providerFailureMessage(benzupResult, "BenzUp"));
 
   if (gdebenz) stations.push(...gdebenz.stations);
@@ -97,7 +97,7 @@ async function searchStations(bbox) {
 
   const merged = mergeStations(stations);
   const yandex = await enrichYandexPrices(merged);
-  if (yandex.warning) warnings.push(yandex.warning);
+  if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
     stations: yandex.stations,

@@ -41,6 +41,8 @@ test("normalizes a Telegram update and sends the business response", async () =>
     text: "Найдено для Казань",
     disable_web_page_preview: true,
   });
+  assert.equal(gateway.status().processedUpdates, 1);
+  assert.ok(gateway.status().lastUpdateAt);
 });
 
 test("formats the fuel summary without turning it into a factual guarantee", () => {
@@ -53,7 +55,20 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       fuels: { 95: { available: 2 } },
     },
     warnings: [],
+    stations: [{
+      name: "Татнефть",
+      address: "Россия, Москва, Тестовая улица, 1",
+      overallStatus: "available",
+      fuelStatus: { 95: "available" },
+      prices: { 95: { value: 70.59 } },
+      sourceRefs: [{ source: "tbank" }, { source: "yandex" }],
+      lastTransactionAt: "2026-07-10T18:54:42.917Z",
+    }],
   });
   assert.match(text, /95: 2 вероятно есть/);
+  assert.match(text, /Татнефть/);
+  assert.match(text, /Тестовая улица, 1/);
+  assert.match(text, /70,59 ₽/);
+  assert.match(text, /T‑Bank, Яндекс/);
   assert.match(text, /вероятностный характер/);
 });
