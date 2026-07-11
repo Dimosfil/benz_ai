@@ -4,6 +4,44 @@ export function inBbox(station, bbox) {
     && station.lon >= bbox.minLon && station.lon <= bbox.maxLon;
 }
 
+function pointOnSegment(point, left, right) {
+  const [x, y] = point;
+  const [x1, y1] = left;
+  const [x2, y2] = right;
+  const cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1);
+  if (Math.abs(cross) > 1e-10) return false;
+  return x >= Math.min(x1, x2) && x <= Math.max(x1, x2)
+    && y >= Math.min(y1, y2) && y <= Math.max(y1, y2);
+}
+
+function pointInRing(point, ring) {
+  let inside = false;
+  for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current++) {
+    const left = ring[previous];
+    const right = ring[current];
+    if (pointOnSegment(point, left, right)) return true;
+    const crosses = (right[1] > point[1]) !== (left[1] > point[1])
+      && point[0] < ((left[0] - right[0]) * (point[1] - right[1])) / (left[1] - right[1]) + right[0];
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(point, polygon) {
+  if (!polygon.length || !pointInRing(point, polygon[0])) return false;
+  return polygon.slice(1).every((hole) => !pointInRing(point, hole));
+}
+
+export function inGeoBoundary(station, boundary) {
+  if (!boundary || !Number.isFinite(station.lat) || !Number.isFinite(station.lon)) return true;
+  const point = [station.lon, station.lat];
+  if (boundary.type === "Polygon") return pointInPolygon(point, boundary.coordinates || []);
+  if (boundary.type === "MultiPolygon") {
+    return (boundary.coordinates || []).some((polygon) => pointInPolygon(point, polygon));
+  }
+  return true;
+}
+
 export function normalizeFuelName(value) {
   const name = String(value || "").trim().toLocaleUpperCase("ru-RU").replace(/Ё/g, "Е");
   const octane = name.match(/(?:АИ[-‑ ]?)?(80|92|95|98|100)/)?.[1];

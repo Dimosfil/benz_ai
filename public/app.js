@@ -256,7 +256,9 @@ function renderSummary(data) {
 }
 
 function renderBuildInfo(build) {
-  if (!build?.shortCommit) {
+  const software = build?.version && build.version !== "unknown" ? `ПО ${build.version}` : "";
+  const knownCommit = build?.shortCommit && build.shortCommit !== "unknown" ? build.shortCommit : "";
+  if (!software && !knownCommit) {
     buildInfoNode.textContent = "Версия неизвестна";
     return;
   }
@@ -264,9 +266,9 @@ function renderBuildInfo(build) {
   const date = parsed && Number.isFinite(parsed.getTime())
     ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(parsed)
     : "дата неизвестна";
-  const software = build.version && build.version !== "unknown" ? `ПО ${build.version} · ` : "";
-  buildInfoNode.textContent = `Версия ${software}${build.shortCommit} · коммит ${date}`;
-  buildInfoNode.title = build.commit;
+  const parts = [software, knownCommit, knownCommit ? `коммит ${date}` : ""].filter(Boolean);
+  buildInfoNode.textContent = `Версия ${parts.join(" · ")}`;
+  buildInfoNode.title = knownCommit ? build.commit : "";
 }
 
 function renderStations() {

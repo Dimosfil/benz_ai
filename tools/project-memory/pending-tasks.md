@@ -14,22 +14,29 @@ generated outputs, secrets, credentials, or private production data.
 
 ## Tasks
 
-### TODO Task Name
+### Correct territory and Telegram summary output
 
-Goal: TODO
+Goal: make city/region results geographically accurate, make every station status visible in Telegram, and never expose placeholder build metadata.
 
 Planned changes:
 
-- [ ] TODO
+- [x] Request and apply the Nominatim administrative boundary when filtering stations.
+- [x] Show all four aggregate availability statuses in Telegram.
+- [x] Render only known build metadata and keep the software version visible.
+- [x] Update product contracts and focused tests.
 
 Execution order:
 
-- [ ] TODO
+- [x] Add boundary containment logic and connect it to the shared summary use case.
+- [x] Update Telegram formatting and build metadata fallbacks.
+- [~] Focused/full verification passed; complete `gi push`.
 
 Risks or dependencies:
 
-- [ ] TODO
+- [x] Nominatim may omit GeoJSON for some place types; bbox filtering remains the safe fallback.
+- [x] Existing provider failures remain isolated and visible.
 
 Verification:
 
-- [ ] TODO
+- [x] Unit tests cover polygon/multipolygon boundaries, summary status completeness, and unknown build metadata.
+- [x] `npm test` and `git diff --check` pass.

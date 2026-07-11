@@ -4,7 +4,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { buildInfo } from "./build-info.js";
-import { mergeStations, summarizeStations } from "./domain/stations.js";
+import { inGeoBoundary, mergeStations, summarizeStations } from "./domain/stations.js";
 import { fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
 import { clearGdebenzCache, fetchGdebenz } from "./providers/gdebenz.js";
 import { clearMultigoCache, fetchMultigo } from "./providers/multigo.js";
@@ -183,7 +183,9 @@ const mime = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; cha
 async function summaryFor(query) {
   const location = await geocodeLocation(query);
   const result = await searchStations(location.bbox);
-  return { ...result, location, summary: summarizeStations(result.stations) };
+  const stations = result.stations.filter((station) => inGeoBoundary(station, location.boundary));
+  const { boundary, ...publicLocation } = location;
+  return { ...result, stations, location: publicLocation, summary: summarizeStations(stations) };
 }
 
 export function startServer(port = config.port) {

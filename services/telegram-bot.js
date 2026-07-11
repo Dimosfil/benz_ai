@@ -57,6 +57,8 @@ export function formatTelegramSummary(result) {
     `АЗС найдено: ${summary.total || 0}`,
     `Вероятно есть топливо: ${statuses.available || 0}`,
     `Возможно есть: ${statuses.maybe_available || 0}`,
+    `Вероятно нет: ${statuses.not_available || 0}`,
+    `Нет данных: ${statuses.no_data || 0}`,
     `С ценами: ${summary.withPrices || 0}`,
     fuels.length ? `\nПо видам топлива:\n${fuels.join("\n")}` : "",
     stationRows.length ? `\nАЗС:\n\n${stationRows.join("\n\n")}` : "",
@@ -68,7 +70,8 @@ export function formatTelegramSummary(result) {
 }
 
 function formatBuildInfo(build) {
-  if (!build?.shortCommit) return "";
+  if (!build) return "";
+  const knownCommit = build.shortCommit && build.shortCommit !== "unknown" ? build.shortCommit : "";
   const date = build.committedAt && Number.isFinite(Date.parse(build.committedAt))
     ? new Intl.DateTimeFormat("ru-RU", {
         timeZone: "Europe/Moscow",
@@ -79,8 +82,9 @@ function formatBuildInfo(build) {
         minute: "2-digit",
       }).format(new Date(build.committedAt)) + " МСК"
     : "дата неизвестна";
-  const software = build.version && build.version !== "unknown" ? `ПО ${build.version} · ` : "";
-  return `Версия: ${software}${build.shortCommit} · коммит ${date}`;
+  const software = build.version && build.version !== "unknown" ? `ПО ${build.version}` : "";
+  const parts = [software, knownCommit, knownCommit ? `коммит ${date}` : ""].filter(Boolean);
+  return parts.length ? `Версия: ${parts.join(" · ")}` : "";
 }
 
 function appendBuildInfo(text, build) {

@@ -69,6 +69,8 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
     }],
   });
   assert.match(text, /95: 2 вероятно есть/);
+  assert.match(text, /Вероятно нет: 0/);
+  assert.match(text, /Нет данных: 0/);
   assert.match(text, /Татнефть/);
   assert.match(text, /Тестовая улица, 1/);
   assert.match(text, /70,59 ₽/);
@@ -78,6 +80,19 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
   assert.match(text, /Версия: ПО 0\.1\.1 · abcdef12 · коммит 11\.07\.2026, 10:30 МСК/);
+});
+
+test("omits unknown commit placeholders while preserving the software version", () => {
+  const text = formatTelegramSummary({
+    location: { name: "Воронеж" },
+    summary: { total: 0, withPrices: 0, statuses: {}, fuels: {} },
+    warnings: [],
+    stations: [],
+    build: { version: "0.1.1", shortCommit: "unknown", committedAt: null },
+  });
+
+  assert.match(text, /Версия: ПО 0\.1\.1/);
+  assert.doesNotMatch(text, /unknown|дата неизвестна/);
 });
 
 test("refresh command invokes the uncached summary workflow", async () => {

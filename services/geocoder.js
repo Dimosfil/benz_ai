@@ -52,7 +52,17 @@ function exactPlaceNameMatch(item, placeName) {
 async function requestPlaces(query) {
   return schedule(async () => {
     const url = new URL(config.geocoder.url);
-    url.search = new URLSearchParams({ q: query, format: "jsonv2", limit: "5", countrycodes: "ru", addressdetails: "1", "accept-language": "ru", layer: "address" });
+    url.search = new URLSearchParams({
+      q: query,
+      format: "jsonv2",
+      limit: "5",
+      countrycodes: "ru",
+      addressdetails: "1",
+      "accept-language": "ru",
+      layer: "address",
+      polygon_geojson: "1",
+      polygon_threshold: "0.0005",
+    });
     const response = await fetch(url, {
       signal: AbortSignal.timeout(config.geocoder.timeoutMs),
       headers: { Accept: "application/json", "User-Agent": config.geocoder.userAgent },
@@ -97,6 +107,7 @@ export async function geocodeLocation(rawQuery) {
     lon: Number(found.lon),
     bbox: { minLat, maxLat, minLon, maxLon },
     attribution: found.licence || "© OpenStreetMap contributors",
+    boundary: ["Polygon", "MultiPolygon"].includes(found.geojson?.type) ? found.geojson : null,
   };
   cache.set(key, { createdAt: Date.now(), value: place });
   return place;
