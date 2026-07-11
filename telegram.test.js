@@ -118,3 +118,25 @@ test("explains a station-wide negative report separately from empty fuel statuse
   assert.match(text, /ГдеБЕНЗ — вероятно нет \(«Заправка не работает», 8 подтверждений, уверенность 74%\)/);
   assert.match(text, /Multigo — только карточка АЗС/);
 });
+
+test("renders every station fuel on its own line and omits a missing observation date", () => {
+  const text = formatTelegramSummary({
+    location: { name: "Бабяково" },
+    summary: { total: 1, withPrices: 0, statuses: { no_data: 1 }, fuels: {} },
+    warnings: [],
+    stations: [{
+      name: "Газпромнефть",
+      address: "Россия, Бабяково",
+      overallStatus: "no_data",
+      fuelStatus: { 92: "no_data", 95: "no_data", DT: "no_data" },
+      prices: {},
+      sourceRefs: [{ source: "sber" }],
+      availabilityBySource: { sber: { overallStatus: "no_data", fuelStatus: {}, operationsCount: 0 } },
+      lastTransactionAt: null,
+    }],
+  });
+
+  assert.match(text, /⛽ 92: ⚪ нет данных\n⛽ 95: ⚪ нет данных\n⛽ DT: ⚪ нет данных/);
+  assert.doesNotMatch(text, /🕒 Данные:/);
+  assert.doesNotMatch(text, /01\.01/);
+});

@@ -103,7 +103,7 @@ function formatStation(station, number) {
   return [
     `${number}. ${statusText[station.overallStatus] || "⚪ нет данных"} — ${station.name || "АЗС"}`,
     `📍 ${address}`,
-    fuels.length ? `⛽ ${fuels.join("; ")}` : "⛽ Данные по видам топлива отсутствуют",
+    fuels.length ? fuels.map((fuel) => `⛽ ${fuel}`).join("\n") : "⛽ Данные по видам топлива отсутствуют",
     ...priceLines,
     stationOnlyStatus ? "ℹ️ Общий статус относится ко всей АЗС; по отдельным видам топлива данных нет." : "",
     observedAt ? `🕒 Данные: ${observedAt}` : "",
@@ -154,6 +154,7 @@ function formatSourceEvidence(station) {
 }
 
 function formatObservedAt(value) {
+  if (value == null || String(value).trim() === "") return null;
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
   return new Intl.DateTimeFormat("ru-RU", {
