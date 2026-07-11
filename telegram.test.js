@@ -140,3 +140,24 @@ test("renders every station fuel on its own line and omits a missing observation
   assert.doesNotMatch(text, /🕒 Данные:/);
   assert.doesNotMatch(text, /01\.01/);
 });
+
+test("does not describe a missing Sber operation count as zero operations", () => {
+  const text = formatTelegramSummary({
+    location: { name: "Бабяково" },
+    summary: { total: 1, withPrices: 0, statuses: { no_data: 1 }, fuels: {} },
+    warnings: [],
+    stations: [{
+      name: "Газпромнефть",
+      address: "Россия, Бабяково",
+      overallStatus: "no_data",
+      fuelStatus: { 92: "no_data" },
+      prices: {},
+      sourceRefs: [{ source: "sber" }],
+      availabilityBySource: { sber: { overallStatus: "no_data", fuelStatus: {}, operationsCount: null } },
+      lastTransactionAt: null,
+    }],
+  });
+
+  assert.match(text, /Sber — нет данных/);
+  assert.doesNotMatch(text, /0 операций/);
+});

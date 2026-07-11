@@ -28,9 +28,60 @@ function station(source, externalId, lat, lon, name = "АЗС") {
 test("does not merge nearby records with different IDs from the same provider", () => {
   const result = mergeStations([
     station("multigo", "one", 51.6, 39.2, "АГНКС"),
-    station("multigo", "two", 51.60001, 39.20001, "АГНКС"),
+    station("multigo", "two", 51.6001, 39.2001, "АГНКС"),
   ]);
   assert.equal(result.length, 2);
+});
+
+test("merges exact co-located catalog duplicates and keeps fresh evidence", () => {
+  const bank = station("tbank", "bank", 51.69258, 39.377016, "Газпром");
+  bank.address = "Бабяково, Транспортная улица";
+  bank.availabilityBySource = { tbank: { overallStatus: "no_data", fuelStatus: { 92: "no_data" }, observedAt: null } };
+  const agnks = station("sber", "gas", 51.692568, 39.377002, "Газпром АГНКС");
+  agnks.address = "Воронежская область, Бабяково, 16 километр, 1";
+  agnks.availabilityBySource = { sber: { overallStatus: "no_data", fuelStatus: { CNG: "no_data" }, observedAt: null } };
+  const petrol = station("sber", "petrol", 51.692568, 39.377002, "Газпромнефть");
+  petrol.address = agnks.address;
+  petrol.availabilityBySource = { sber: { overallStatus: "no_data", fuelStatus: { 92: "no_data", 95: "no_data" }, observedAt: null } };
+  const report = station("gdebenz", "report", 51.6927, 39.3769, "Газпром");
+  report.address = "Совхозная улица, 9А";
+  report.availabilityBySource = {
+    gdebenz: {
+      overallStatus: "available",
+      fuelStatus: { 92: "available", 95: "available", DT: "available" },
+      observedAt: "2026-07-11T07:25:30+03:00",
+      confirmations: 3,
+      confidence: 0.55,
+    },
+  };
+
+  const result = mergeStations([bank, agnks, petrol, report]);
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].sourceRefs.map((ref) => `${ref.source}:${ref.externalId}`), [
+    "tbank:bank",
+    "sber:gas",
+    "sber:petrol",
+    "gdebenz:report",
+  ]);
+  assert.equal(result[0].overallStatus, "available");
+  assert.equal(result[0].name, "Газпромнефть");
+  assert.equal(result[0].fuelStatus["92"], "available");
+  assert.equal(result[0].fuelStatus.CNG, "no_data");
+  assert.equal(result[0].availabilityBySource.gdebenz.confirmations, 3);
+});
+
+test("finds a merged station by any catalog name or address", () => {
+  const stations = [{
+    name: "Газпромнефть",
+    address: "Воронеж-Тамбов, 16 километр",
+    nameAliases: ["Газпром", "Газпром АГНКС"],
+    addressAliases: ["Транспортная улица"],
+    overallStatus: "available",
+    fuelStatus: {},
+  }];
+  assert.equal(filterStations(stations, { text: "Газпром АГНКС" }).length, 1);
+  assert.equal(filterStations(stations, { text: "Транспортная" }).length, 1);
 });
 
 test("still merges records for the same station from different providers", () => {

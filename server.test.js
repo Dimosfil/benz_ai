@@ -72,6 +72,18 @@ test("normalizes Sber station availability", () => {
   assert.equal(station.overallStatus, "available");
   assert.equal(station.fuelStatus["92"], "available");
   assert.equal(station.fuelStatus.DT, "maybe_available");
+  assert.equal(station.availabilityBySource.sber.operationsCount, null);
+});
+
+test("preserves an explicit zero Sber operation count", () => {
+  const station = normalizeSberStation({
+    id: "s2",
+    location: { lat: 51.6, lon: 39.2 },
+    availabilityStatus: "unknown",
+    operationsCount: 0,
+    fuels: [],
+  });
+  assert.equal(station.availabilityBySource.sber.operationsCount, 0);
 });
 
 test("normalizes ГдеБЕНЗ status details", () => {

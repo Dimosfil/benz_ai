@@ -27,6 +27,28 @@ function stationNameKey(value) {
   return String(value || "").toLocaleLowerCase("ru-RU").replace(/[^a-zа-я0-9]/giu, "");
 }
 
+function stationAddressKey(value) {
+  return String(value || "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/^россия\s*,?\s*/u, "")
+    .replace(/[^a-zа-я0-9]/giu, "");
+}
+
+function addressesOf(station) {
+  return [station.address, ...(station.addressAliases || [])].filter(Boolean);
+}
+
+function namesOf(station) {
+  return [station.name, ...(station.nameAliases || [])].filter(Boolean);
+}
+
+function preferredStationName(names) {
+  const unique = [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
+  const brandLike = unique.filter((name) => !/(?:^|\s)(?:азс|агзс|агнкс)(?:\s|$)|№\s*\d/iu.test(name));
+  return (brandLike.length ? brandLike : unique)
+    .sort((left, right) => right.length - left.length || left.localeCompare(right, "ru"))[0];
+}
+
 function refsOf(station) {
   return station.sourceRefs || (station.source ? [{ source: station.source, externalId: station.externalId }] : []);
 }
@@ -45,12 +67,19 @@ function sharesProvider(left, right) {
   return refsOf(left).some((ref) => rightSources.has(ref.source));
 }
 
+function isCoLocatedDuplicate(left, right) {
+  if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
+  if (distanceMeters(left, right) > 5) return false;
+  const leftAddresses = new Set(addressesOf(left).map(stationAddressKey).filter(Boolean));
+  return addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+}
+
 function isSameStation(left, right) {
   if (left.yandexOrgId && right.yandexOrgId === left.yandexOrgId) return true;
   if (sameProviderIdentity(left, right)) return true;
-  // Different IDs from the same provider represent different source records;
-  // proximity must not collapse them into "Multigo + Multigo" or equivalents.
-  if (sharesProvider(left, right)) return false;
+  // Distinct records from one provider stay separate unless the provider has
+  // duplicated the exact same physical point and address under multiple IDs.
+  if (sharesProvider(left, right)) return isCoLocatedDuplicate(left, right);
   if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
   const distance = distanceMeters(left, right);
   const leftName = stationNameKey(left.name);
@@ -62,6 +91,38 @@ function aggregateStatuses(values) {
   if (!known.length) return "no_data";
   const unique = new Set(known);
   return unique.size === 1 ? known[0] : "maybe_available";
+}
+
+function latestObservedAt(values) {
+  const timestamps = values.filter((value) => Number.isFinite(Date.parse(value)));
+  return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
+}
+
+function maximumNumber(values) {
+  const numbers = values.filter((value) => value != null && Number.isFinite(Number(value))).map(Number);
+  return numbers.length ? Math.max(...numbers) : null;
+}
+
+function mergeEvidence(left = {}, right = {}) {
+  const fuels = new Set([...Object.keys(left.fuelStatus || {}), ...Object.keys(right.fuelStatus || {})]);
+  return {
+    ...left,
+    ...right,
+    overallStatus: aggregateStatuses([left.overallStatus, right.overallStatus]),
+    fuelStatus: Object.fromEntries([...fuels].map((fuel) => [
+      fuel,
+      aggregateStatuses([left.fuelStatus?.[fuel], right.fuelStatus?.[fuel]].filter(Boolean)),
+    ])),
+    observedAt: latestObservedAt([left.observedAt, right.observedAt]),
+    operationsCount: maximumNumber([left.operationsCount, right.operationsCount]),
+    confirmations: maximumNumber([left.confirmations, right.confirmations]),
+    confidence: maximumNumber([left.confidence, right.confidence]),
+  };
+}
+
+function mergeEvidenceBySource(left = {}, right = {}) {
+  const sources = new Set([...Object.keys(left), ...Object.keys(right)]);
+  return Object.fromEntries([...sources].map((source) => [source, mergeEvidence(left[source], right[source])]));
 }
 
 function recomputeAvailability(station) {
@@ -89,9 +150,12 @@ export function mergeStations(stations) {
     }
     const refs = [...refsOf(match), ...refsOf(station)];
     match.sourceRefs = [...new Map(refs.map((ref) => [refKey(ref), ref])).values()];
+    match.addressAliases = [...new Set([...addressesOf(match), ...addressesOf(station)])];
+    match.nameAliases = [...new Set([...namesOf(match), ...namesOf(station)])];
+    match.name = preferredStationName(match.nameAliases) || match.name;
     match.prices = { ...(match.prices || {}), ...(station.prices || {}) };
     match.links = { ...(match.links || {}), ...(station.links || {}) };
-    match.availabilityBySource = { ...(match.availabilityBySource || {}), ...(station.availabilityBySource || {}) };
+    match.availabilityBySource = mergeEvidenceBySource(match.availabilityBySource, station.availabilityBySource);
     match.yandexOrgId ||= station.yandexOrgId;
     match.priceUpdatedAt ||= station.priceUpdatedAt;
   }

@@ -143,7 +143,9 @@ function formatSourceEvidence(station) {
 
     const details = [];
     if (signal.detail) details.push(`«${signal.detail}»`);
-    if (Number.isFinite(Number(signal.operationsCount))) details.push(`${Number(signal.operationsCount)} операций`);
+    if (signal.operationsCount != null && Number.isFinite(Number(signal.operationsCount))) {
+      details.push(`${Number(signal.operationsCount)} операций`);
+    }
     if (Number.isFinite(Number(signal.confirmations))) details.push(`${Number(signal.confirmations)} подтверждений`);
     if (Number.isFinite(Number(signal.confidence)) && Number(signal.confidence) > 0) {
       details.push(`уверенность ${Math.round(Number(signal.confidence) * 100)}%`);

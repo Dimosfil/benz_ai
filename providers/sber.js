@@ -10,6 +10,9 @@ export function normalizeSberStation(station) {
   const overallStatus = normalizeStatus(station.availabilityStatus);
   const externalId = String(station.id || station.branchId || "");
   const lastTransactionAt = station.lastPaymentAt || null;
+  const operationsCount = station.operationsCount == null || station.operationsCount === ""
+    ? null
+    : Number(station.operationsCount);
   return {
     source: "sber",
     sourceRefs: [{ source: "sber", externalId }],
@@ -25,7 +28,7 @@ export function normalizeSberStation(station) {
         overallStatus,
         fuelStatus,
         observedAt: lastTransactionAt,
-        operationsCount: Number(station.operationsCount) || 0,
+        operationsCount: Number.isFinite(operationsCount) ? operationsCount : null,
         crowdState: station.crowdState || null,
       },
     },

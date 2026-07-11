@@ -11,7 +11,8 @@ export function filterStations(stations, { fuels = [], statuses = [], text = "" 
     const hasSelectedFuel = !fuels.length || fuels.some((type) => station.fuelStatus[type]);
     const actualStatus = selectionStatus(station, fuels);
     const matchesStatus = !statuses.length || statuses.includes(actualStatus);
-    const matchesText = !query || `${station.name} ${station.address}`.toLocaleLowerCase("ru-RU").includes(query);
+    const searchableText = [station.name, station.address, ...(station.nameAliases || []), ...(station.addressAliases || [])].join(" ");
+    const matchesText = !query || searchableText.toLocaleLowerCase("ru-RU").includes(query);
     return hasSelectedFuel && matchesStatus && matchesText;
   });
 }
