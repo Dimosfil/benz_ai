@@ -1,7 +1,12 @@
 FROM node:22-bookworm-slim
 
+ARG GIT_COMMIT_SHA=unknown
+ARG GIT_COMMIT_DATE=
+
 ENV NODE_ENV=production \
     PORT=3000 \
+    GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
+    GIT_COMMIT_DATE=${GIT_COMMIT_DATE} \
     CHROME_PATH=/usr/bin/chromium \
     CHROME_NO_SANDBOX=1
 
@@ -14,7 +19,7 @@ ENV HOME=/tmp
 WORKDIR /app
 
 COPY --chown=node:node package.json ./
-COPY --chown=node:node server.js config.js ./
+COPY --chown=node:node server.js config.js build-info.js ./
 COPY --chown=node:node domain ./domain
 COPY --chown=node:node providers ./providers
 COPY --chown=node:node public ./public

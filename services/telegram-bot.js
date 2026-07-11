@@ -1,15 +1,15 @@
-export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary }) {
+export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary, buildInfo = null }) {
   return async function handleTelegramMessage(message) {
     const text = String(message?.text || "").trim();
     if (!text) return null;
 
     if (/^\/(start|help)(?:@\w+)?$/i.test(text)) {
-      return [
+      return appendBuildInfo([
         "Benz AI ищет АЗС и вероятностные данные о наличии топлива.",
         "Отправьте название города или региона России, например: Воронеж.",
         "Для принудительного обновления используйте: /refresh Воронеж.",
         "Веб-версия показывает полный список станций, фильтры и источники.",
-      ].join("\n\n");
+      ].join("\n\n"), buildInfo);
     }
 
     const refreshMatch = text.match(/^\/refresh(?:@\w+)?(?:\s+(.+))?$/i);
@@ -63,7 +63,28 @@ export function formatTelegramSummary(result) {
     remaining ? `\nЕщё ${remaining} АЗС доступны в веб-версии.` : "",
     warnings.length ? `\nОграничения источников:\n${warnings.join("\n")}` : "",
     "\nДоступность носит вероятностный характер. Полная таблица доступна в веб-версии.",
+    formatBuildInfo(result.build),
   ].filter(Boolean).join("\n");
+}
+
+function formatBuildInfo(build) {
+  if (!build?.shortCommit) return "";
+  const date = build.committedAt && Number.isFinite(Date.parse(build.committedAt))
+    ? new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(build.committedAt)) + " МСК"
+    : "дата неизвестна";
+  return `Версия: ${build.shortCommit} · коммит ${date}`;
+}
+
+function appendBuildInfo(text, build) {
+  const version = formatBuildInfo(build);
+  return version ? `${text}\n\n${version}` : text;
 }
 
 const statusText = {

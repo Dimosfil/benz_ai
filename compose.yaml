@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        GIT_COMMIT_SHA: "${GIT_COMMIT_SHA:-unknown}"
+        GIT_COMMIT_DATE: "${GIT_COMMIT_DATE:-}"
     image: benz-ai:local
     init: true
     restart: unless-stopped

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
+import { buildInfo } from "./build-info.js";
 import { mergeStations, summarizeStations } from "./domain/stations.js";
 import { fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
 import { clearGdebenzCache, fetchGdebenz } from "./providers/gdebenz.js";
@@ -100,6 +101,7 @@ async function searchStations(bbox) {
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
+    build: buildInfo,
     stations: yandex.stations,
     warnings: warnings.filter(Boolean),
     sourceRequests: {
@@ -186,6 +188,7 @@ async function summaryFor(query) {
 
 export function startServer(port = config.port) {
   const telegramGateway = new TelegramPollingGateway(createBenzTelegramHandler({
+    buildInfo,
     findSummary: summaryFor,
     refreshSummary: async (query) => {
       clearAllCaches();
@@ -212,6 +215,7 @@ export function startServer(port = config.port) {
       if (requestUrl.pathname === "/api/stations") return json(res, 200, await searchStations(readBbox(requestUrl.searchParams)));
       if (requestUrl.pathname === "/api/health") return json(res, 200, {
         ok: true,
+        build: buildInfo,
         sberWorker: sberWorker.status(),
         telegram: telegramGateway.status(),
       });

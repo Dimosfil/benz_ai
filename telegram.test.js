@@ -55,6 +55,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       fuels: { 95: { available: 2 } },
     },
     warnings: [],
+    build: { shortCommit: "abcdef12", committedAt: "2026-07-11T10:30:00+03:00" },
     stations: [{
       name: "Татнефть",
       address: "Россия, Москва, Тестовая улица, 1",
@@ -76,6 +77,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /T‑Bank — вероятно есть/);
   assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
+  assert.match(text, /Версия: abcdef12 · коммит 11\.07\.2026, 10:30 МСК/);
 });
 
 test("refresh command invokes the uncached summary workflow", async () => {

@@ -38,6 +38,7 @@ const template = document.querySelector("#station");
 const overview = document.querySelector("#overview");
 const findButton = document.querySelector("#find");
 const refreshButton = document.querySelector("#refresh-cache");
+const buildInfoNode = document.querySelector("#build-info");
 let allStations = [];
 let currentPage = 1;
 let pageSize = Number(pageSizeSelect.value);
@@ -251,6 +252,20 @@ function renderSummary(data) {
   });
   document.querySelector("#brand-summary").replaceChildren(...brands);
   document.querySelector("#attribution").textContent = `Геокодирование: ${data.location.attribution}. Доступность топлива носит вероятностный характер.`;
+  renderBuildInfo(data.build);
+}
+
+function renderBuildInfo(build) {
+  if (!build?.shortCommit) {
+    buildInfoNode.textContent = "Версия неизвестна";
+    return;
+  }
+  const parsed = build.committedAt ? new Date(build.committedAt) : null;
+  const date = parsed && Number.isFinite(parsed.getTime())
+    ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(parsed)
+    : "дата неизвестна";
+  buildInfoNode.textContent = `Версия ${build.shortCommit} · коммит ${date}`;
+  buildInfoNode.title = build.commit;
 }
 
 function renderStations() {
@@ -424,4 +439,5 @@ applyColumnOrder();
 updateFuelPicker();
 updateStatusPicker();
 new ResizeObserver(scheduleSaveUIState).observe(tableWrap);
+fetchJson("/api/health").then((data) => renderBuildInfo(data.build)).catch(() => renderBuildInfo(null));
 loadSummary();

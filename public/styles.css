@@ -100,5 +100,6 @@ button:disabled{opacity:.6;cursor:wait}
 .fuel{font-weight:700;margin-top:8px!important}
 .prices{font-weight:800;color:#176635;margin-top:7px!important}
 .detail{color:#8a5a00;font-size:.86rem;margin-top:7px!important}
-footer{color:#7a857e;font-size:.75rem;margin:28px 0}
+footer{color:#7a857e;font-size:.75rem;margin:28px 0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px}
+#build-info{font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:720px){main{padding:32px 14px}.controls{grid-template-columns:1fr 1fr}.location,.search{grid-column:span 2}.summary-cards{grid-template-columns:1fr 1fr}.breakdown{grid-template-columns:1fr}.table-toolbar{align-items:flex-start;flex-direction:column}.resize-hint,.reset-size{display:none}.page-controls{width:100%;justify-content:space-between}.page-controls label{font-size:0}.page-controls label::before{content:"Строк";font-size:.84rem}.table-wrap{display:none}.results{display:grid}.station{flex-direction:column}.right{text-align:left}}
