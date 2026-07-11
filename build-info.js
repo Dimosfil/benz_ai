@@ -12,10 +12,13 @@ function gitValue(args) {
 export function resolveBuildInfo(env = process.env, readGit = gitValue) {
   let baked = {};
   try { baked = JSON.parse(readFileSync(new URL("./build-metadata.json", import.meta.url), "utf8")); } catch {}
+  let softwareVersion = "unknown";
+  try { softwareVersion = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version || softwareVersion; } catch {}
   const injectedCommit = /^(?:|unknown)$/i.test(String(env.GIT_COMMIT_SHA || "").trim()) ? "" : env.GIT_COMMIT_SHA;
   const commit = String(injectedCommit || baked.commit || readGit(["rev-parse", "HEAD"]) || "unknown").trim();
   const committedAt = String(env.GIT_COMMIT_DATE || baked.committedAt || readGit(["show", "-s", "--format=%cI", "HEAD"]) || "").trim() || null;
   return Object.freeze({
+    version: softwareVersion,
     commit,
     shortCommit: commit === "unknown" ? commit : commit.slice(0, 8),
     committedAt,

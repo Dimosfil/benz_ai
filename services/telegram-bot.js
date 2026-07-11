@@ -79,7 +79,8 @@ function formatBuildInfo(build) {
         minute: "2-digit",
       }).format(new Date(build.committedAt)) + " МСК"
     : "дата неизвестна";
-  return `Версия: ${build.shortCommit} · коммит ${date}`;
+  const software = build.version && build.version !== "unknown" ? `ПО ${build.version} · ` : "";
+  return `Версия: ${software}${build.shortCommit} · коммит ${date}`;
 }
 
 function appendBuildInfo(text, build) {

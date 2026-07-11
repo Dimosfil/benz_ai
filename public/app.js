@@ -264,7 +264,8 @@ function renderBuildInfo(build) {
   const date = parsed && Number.isFinite(parsed.getTime())
     ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(parsed)
     : "дата неизвестна";
-  buildInfoNode.textContent = `Версия ${build.shortCommit} · коммит ${date}`;
+  const software = build.version && build.version !== "unknown" ? `ПО ${build.version} · ` : "";
+  buildInfoNode.textContent = `Версия ${software}${build.shortCommit} · коммит ${date}`;
   buildInfoNode.title = build.commit;
 }
 

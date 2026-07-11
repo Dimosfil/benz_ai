@@ -1,12 +1,13 @@
 {
   "name": "benz-ai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "version:bump": "node scripts/bump-version.js",
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --env-file-if-exists=.env --watch server.js",
     "test": "node --test"

@@ -43,6 +43,12 @@ TELEGRAM_BOT_TOKEN=123456789:real-token-goes-here
 `.git/logs/HEAD`; `GIT_COMMIT_SHA` и `GIT_COMMIT_DATE` остаются доступными как
 приоритетное переопределение для CI.
 
+Каждый новый коммит автоматически увеличивает patch-версию приложения через
+отслеживаемый `.githooks/pre-commit` и `scripts/bump-version.js`. Один раз после
+клонирования включите проектные hooks командой `git config core.hooksPath .githooks`.
+Повторный запуск неудавшегося коммита не увеличивает уже подготовленную версию
+ещё раз. Текущая версия хранится в `package.json` и показывается вместе с хешем.
+
 ## Docker
 
 Образ включает Node.js 22 и Chromium для Sber browser-worker. Секреты в образ

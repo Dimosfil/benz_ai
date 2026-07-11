@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { resolveBuildInfo } from "./build-info.js";
 import { metadataFromGitHeadLog } from "./scripts/create-build-metadata.js";
 
@@ -9,6 +10,7 @@ test("uses injected commit metadata for packaged runtimes", () => {
     GIT_COMMIT_DATE: "2026-07-11T10:30:00+03:00",
   }, () => { throw new Error("git fallback must not run"); });
   assert.deepEqual(info, {
+    version: JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version,
     commit: "1234567890abcdef",
     shortCommit: "12345678",
     committedAt: "2026-07-11T10:30:00+03:00",
