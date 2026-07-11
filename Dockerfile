@@ -1,12 +1,7 @@
 FROM node:22-bookworm-slim
 
-ARG GIT_COMMIT_SHA=unknown
-ARG GIT_COMMIT_DATE=
-
 ENV NODE_ENV=production \
     PORT=3000 \
-    GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
-    GIT_COMMIT_DATE=${GIT_COMMIT_DATE} \
     CHROME_PATH=/usr/bin/chromium \
     CHROME_NO_SANDBOX=1
 
@@ -14,11 +9,20 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
+ARG GIT_COMMIT_SHA=unknown
+ARG GIT_COMMIT_DATE=
+ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
+    GIT_COMMIT_DATE=${GIT_COMMIT_DATE}
+
 ENV HOME=/tmp
 
 WORKDIR /app
 
 COPY --chown=node:node package.json ./
+COPY --chown=node:node scripts/create-build-metadata.js /tmp/create-build-metadata.js
+COPY --chown=node:node .git/logs/HEAD /tmp/git-head-log
+RUN node /tmp/create-build-metadata.js /tmp/git-head-log /app/build-metadata.json \
+    && rm -f /tmp/create-build-metadata.js /tmp/git-head-log
 COPY --chown=node:node server.js config.js build-info.js ./
 COPY --chown=node:node domain ./domain
 COPY --chown=node:node providers ./providers

@@ -162,4 +162,5 @@ test("does not describe a missing Sber operation count as zero operations", () =
 
   assert.match(text, /Sber — нет данных/);
   assert.doesNotMatch(text, /0 операций/);
+  assert.doesNotMatch(text, /0 подтверждений/);
 });
