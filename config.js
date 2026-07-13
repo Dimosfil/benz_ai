@@ -35,7 +35,12 @@ export const config = Object.freeze({
     token: process.env.BENZUP_API_TOKEN || "",
     timeoutMs: 30_000,
   }),
-  sber: Object.freeze({ refreshMs: 60_000 }),
+  sber: Object.freeze({
+    refreshMs: positiveInteger(process.env.SBER_REFRESH_MS, 60_000),
+    activeAreaTtlMs: positiveInteger(process.env.SBER_ACTIVE_AREA_TTL_MS, 15 * 60_000),
+    maxActiveAreas: positiveInteger(process.env.SBER_MAX_ACTIVE_AREAS, 10),
+    browserIdleMs: positiveInteger(process.env.SBER_BROWSER_IDLE_MS, 30_000),
+  }),
   yandex: Object.freeze({
     enabled: enabledByDefault(process.env.ENABLE_YANDEX_PRICES),
     limit: Number.isFinite(yandexLimit) && yandexLimit > 0 ? Math.floor(yandexLimit) : Infinity,

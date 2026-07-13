@@ -7,6 +7,7 @@ import { join } from "node:path";
 const DEFAULT_REFRESH_MS = 60_000;
 const ACTIVE_AREA_TTL_MS = 15 * 60_000;
 const MAX_ACTIVE_AREAS = 10;
+const DEFAULT_BROWSER_IDLE_MS = 30_000;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,19 +94,36 @@ class CdpClient {
 }
 
 export class SberBrowserWorker {
-  constructor({ refreshMs = DEFAULT_REFRESH_MS } = {}) {
+  constructor({
+    refreshMs = DEFAULT_REFRESH_MS,
+    activeAreaTtlMs = ACTIVE_AREA_TTL_MS,
+    maxActiveAreas = MAX_ACTIVE_AREAS,
+    browserIdleMs = DEFAULT_BROWSER_IDLE_MS,
+  } = {}) {
     this.refreshMs = refreshMs;
+    this.activeAreaTtlMs = activeAreaTtlMs;
+    this.maxActiveAreas = maxActiveAreas;
+    this.browserIdleMs = browserIdleMs;
     this.chrome = null;
     this.profileDir = null;
     this.cdp = null;
     this.startPromise = null;
+    this.closePromise = null;
     this.refreshing = null;
     this.timer = null;
+    this.idleTimer = null;
     this.areas = new Map();
+    this.activeOperations = 0;
+    this.lastActivityAt = null;
+    this.lastStartedAt = null;
+    this.lastStoppedAt = null;
+    this.lastStopReason = null;
+    this.stopping = false;
     this.lastError = null;
   }
 
   async ensureStarted() {
+    if (this.closePromise) await this.closePromise;
     if (this.cdp) return;
     if (!this.startPromise) this.startPromise = this.start().catch((error) => {
       this.startPromise = null;
@@ -119,14 +137,17 @@ export class SberBrowserWorker {
     const chromePath = findChrome();
     if (!chromePath) throw new Error("Chrome/Edge не найден; задайте CHROME_PATH");
     this.profileDir = await mkdtemp(join(tmpdir(), "benz-ai-sber-"));
-    this.chrome = spawn(chromePath, chromeArguments(this.profileDir), {
+    const chrome = spawn(chromePath, chromeArguments(this.profileDir), {
       stdio: "ignore",
       windowsHide: true,
     });
-    this.chrome.once("exit", () => {
+    this.chrome = chrome;
+    chrome.once("exit", () => {
+      if (this.chrome !== chrome) return;
       this.cdp?.close();
       this.cdp = null;
       this.startPromise = null;
+      if (!this.stopping) this.recordStop("browser_exit");
     });
 
     const activePortFile = join(this.profileDir, "DevToolsActivePort");
@@ -168,8 +189,43 @@ export class SberBrowserWorker {
     }
     if (!ready) throw new Error("Sber AZS не завершил браузерную JavaScript-проверку");
     this.lastError = null;
+    this.lastStartedAt = new Date().toISOString();
+    this.lastStopReason = null;
     this.timer = setInterval(() => this.refreshActiveAreas().catch((error) => { this.lastError = error; }), this.refreshMs);
     this.timer.unref();
+  }
+
+  recordStop(reason) {
+    this.lastStoppedAt = new Date().toISOString();
+    this.lastStopReason = reason;
+  }
+
+  clearIdleClose() {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  scheduleIdleClose() {
+    if (!this.cdp || this.areas.size || this.activeOperations || this.refreshing || this.idleTimer) return;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      if (this.cdp && !this.areas.size && !this.activeOperations && !this.refreshing) {
+        this.close("idle_timeout").catch((error) => { this.lastError = error; });
+      }
+    }, this.browserIdleMs);
+    this.idleTimer.unref();
+  }
+
+  beginOperation() {
+    this.activeOperations += 1;
+    this.lastActivityAt = Date.now();
+    this.clearIdleClose();
+  }
+
+  endOperation() {
+    this.activeOperations = Math.max(0, this.activeOperations - 1);
+    this.lastActivityAt = Date.now();
+    this.scheduleIdleClose();
   }
 
   areaKey(bbox) {
@@ -177,20 +233,25 @@ export class SberBrowserWorker {
   }
 
   async getStations(bbox) {
-    const key = this.areaKey(bbox);
-    let area = this.areas.get(key);
-    if (!area) {
-      if (this.areas.size >= MAX_ACTIVE_AREAS) {
-        const oldest = [...this.areas.entries()].sort((left, right) => left[1].accessedAt - right[1].accessedAt)[0];
-        if (oldest) this.areas.delete(oldest[0]);
+    this.beginOperation();
+    try {
+      const key = this.areaKey(bbox);
+      let area = this.areas.get(key);
+      if (!area) {
+        if (this.areas.size >= this.maxActiveAreas) {
+          const oldest = [...this.areas.entries()].sort((left, right) => left[1].accessedAt - right[1].accessedAt)[0];
+          if (oldest) this.areas.delete(oldest[0]);
+        }
+        area = { bbox: { ...bbox }, data: null, fetchedAt: 0, accessedAt: Date.now(), error: null };
+        this.areas.set(key, area);
       }
-      area = { bbox: { ...bbox }, data: null, fetchedAt: 0, accessedAt: Date.now(), error: null };
-      this.areas.set(key, area);
+      area.accessedAt = Date.now();
+      if (!area.data || Date.now() - area.fetchedAt >= this.refreshMs) await this.refreshArea(area);
+      if (!area.data && area.error) throw area.error;
+      return { ...area.data, fetchedAt: area.fetchedAt, browser: true };
+    } finally {
+      this.endOperation();
     }
-    area.accessedAt = Date.now();
-    if (!area.data || Date.now() - area.fetchedAt >= this.refreshMs) await this.refreshArea(area);
-    if (!area.data && area.error) throw area.error;
-    return { ...area.data, fetchedAt: area.fetchedAt, browser: true };
   }
 
   async refreshArea(area) {
@@ -211,25 +272,46 @@ export class SberBrowserWorker {
 
   async refreshActiveAreas() {
     if (this.refreshing) return this.refreshing;
-    this.refreshing = (async () => {
+    if (!this.areas.size) {
+      this.scheduleIdleClose();
+      return;
+    }
+    this.beginOperation();
+    const refresh = (async () => {
       const now = Date.now();
-      for (const [key, area] of this.areas) {
-        if (now - area.accessedAt > ACTIVE_AREA_TTL_MS) {
-          this.areas.delete(key);
-          continue;
+      try {
+        for (const [key, area] of this.areas) {
+          if (now - area.accessedAt > this.activeAreaTtlMs) {
+            this.areas.delete(key);
+            continue;
+          }
+          try { await this.refreshArea(area); } catch {}
         }
-        try { await this.refreshArea(area); } catch {}
+      } finally {
+        this.endOperation();
       }
-    })().finally(() => { this.refreshing = null; });
-    return this.refreshing;
+    })();
+    this.refreshing = refresh;
+    return refresh.finally(() => {
+      if (this.refreshing === refresh) this.refreshing = null;
+      this.scheduleIdleClose();
+    });
   }
 
   status() {
     const fetched = [...this.areas.values()].map((area) => area.fetchedAt).filter(Boolean);
     return {
       running: Boolean(this.cdp),
+      lifecycle: this.closePromise ? "stopping" : this.cdp ? (this.activeOperations ? "busy" : this.areas.size ? "ready" : "idle") : "stopped",
       activeAreas: this.areas.size,
+      activeOperations: this.activeOperations,
       refreshMs: this.refreshMs,
+      activeAreaTtlMs: this.activeAreaTtlMs,
+      browserIdleMs: this.browserIdleMs,
+      lastActivityAt: this.lastActivityAt ? new Date(this.lastActivityAt).toISOString() : null,
+      lastStartedAt: this.lastStartedAt,
+      lastStoppedAt: this.lastStoppedAt,
+      lastStopReason: this.lastStopReason,
       lastRefreshAt: fetched.length ? new Date(Math.max(...fetched)).toISOString() : null,
       lastError: this.lastError?.message || null,
     };
@@ -243,9 +325,17 @@ export class SberBrowserWorker {
     }
   }
 
-  async close() {
+  async close(reason = "shutdown") {
+    if (this.closePromise) return this.closePromise;
+    this.closePromise = this.stop(reason).finally(() => { this.closePromise = null; });
+    return this.closePromise;
+  }
+
+  async stop(reason) {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.clearIdleClose();
+    this.stopping = true;
     this.cdp?.close();
     this.cdp = null;
     const chrome = this.chrome;
@@ -255,6 +345,7 @@ export class SberBrowserWorker {
       await Promise.race([exited, wait(3_000)]);
     }
     this.chrome = null;
+    this.startPromise = null;
     if (this.profileDir) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
@@ -266,5 +357,7 @@ export class SberBrowserWorker {
       }
     }
     this.profileDir = null;
+    this.stopping = false;
+    this.recordStop(reason);
   }
 }

@@ -21,7 +21,7 @@ export { normalizeFuelName } from "./domain/stations.js";
 
 const PUBLIC_DIR = join(process.cwd(), "public");
 const resultCache = new Map();
-const sberWorker = new SberBrowserWorker({ refreshMs: config.sber.refreshMs });
+const sberWorker = new SberBrowserWorker(config.sber);
 
 function json(res, status, body) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });

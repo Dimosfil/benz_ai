@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeGdebenzStation } from "./providers/gdebenz.js";
 import { normalizeMultigoStation } from "./providers/multigo.js";
-import { chromeArguments } from "./providers/sber-browser.js";
+import { chromeArguments, SberBrowserWorker } from "./providers/sber-browser.js";
 import { isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices } from "./server.js";
 
 test("starts the Sber Chromium worker without a GUI", () => {
@@ -22,6 +22,74 @@ test("enables Chromium's container flag only through explicit configuration", ()
     if (previous === undefined) delete process.env.CHROME_NO_SANDBOX;
     else process.env.CHROME_NO_SANDBOX = previous;
   }
+});
+
+test("reports a safe stopped Sber worker lifecycle", () => {
+  const worker = new SberBrowserWorker({
+    refreshMs: 12_000,
+    activeAreaTtlMs: 34_000,
+    maxActiveAreas: 2,
+    browserIdleMs: 5_000,
+  });
+  assert.deepEqual(worker.status(), {
+    running: false,
+    lifecycle: "stopped",
+    activeAreas: 0,
+    activeOperations: 0,
+    refreshMs: 12_000,
+    activeAreaTtlMs: 34_000,
+    browserIdleMs: 5_000,
+    lastActivityAt: null,
+    lastStartedAt: null,
+    lastStoppedAt: null,
+    lastStopReason: null,
+    lastRefreshAt: null,
+    lastError: null,
+  });
+});
+
+test("removes stale Sber areas before scheduling an idle browser close", async () => {
+  const worker = new SberBrowserWorker({ activeAreaTtlMs: 1, browserIdleMs: 1 });
+  worker.areas.set("stale", { accessedAt: Date.now() - 10, fetchedAt: 0, data: null, error: null });
+  await worker.refreshActiveAreas();
+  assert.equal(worker.areas.size, 0);
+  assert.equal(worker.activeOperations, 0);
+});
+
+test("stops an idle Sber browser after the configured grace period", async () => {
+  const worker = new SberBrowserWorker({ browserIdleMs: 1 });
+  worker.cdp = { close() {} };
+  worker.scheduleIdleClose();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(worker.status().lifecycle, "stopped");
+  assert.equal(worker.status().lastStopReason, "idle_timeout");
+  assert.ok(worker.status().lastStoppedAt);
+});
+
+test("does not reset the Sber idle close timer when there are no active areas", async () => {
+  const worker = new SberBrowserWorker({ browserIdleMs: 1 });
+  worker.cdp = { close() {} };
+  await worker.refreshActiveAreas();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(worker.status().lastStopReason, "idle_timeout");
+});
+
+test("defers a new Sber browser start until an in-progress stop completes", async () => {
+  const worker = new SberBrowserWorker();
+  let releaseStop;
+  worker.closePromise = new Promise((resolve) => { releaseStop = resolve; });
+  let started = false;
+  worker.start = async () => {
+    started = true;
+    worker.cdp = {};
+  };
+
+  const starting = worker.ensureStarted();
+  assert.equal(started, false);
+  releaseStop();
+  await starting;
+  assert.equal(started, true);
+  assert.equal(worker.cdp !== null, true);
 });
 
 test("normalizes common fuel names", () => {
