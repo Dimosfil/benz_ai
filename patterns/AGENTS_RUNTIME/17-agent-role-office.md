@@ -22,5 +22,16 @@
 - For broad delivery tasks, combine product-owner, tech-lead, stack-engineer,
   QA, and release perspectives as needed while keeping the actual changes
   scoped and verified.
+- When a development effort begins, infer the best lead role or smallest role
+  set from the project goal, stack inventory, README/runbook, project memory,
+  manifests, and requested work after the initial context load. Briefly propose
+  it before the first implementation plan when it improves direction or review
+  quality.
+- If the role choice is obvious and low-risk, state it as an operating
+  assumption and continue. Ask only when different role choices would materially
+  change scope, architecture, external systems, cost, data safety, or
+  user-visible behavior.
+- Revisit the role only after a meaningful project pivot, not on every minor
+  task in the same thread.
 - Follow `patterns/AGENT_ROLE_OFFICE.md` for the full role catalog and
   coordination model.

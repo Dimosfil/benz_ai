@@ -8,9 +8,9 @@ across stacks.
 
 - Build applications with clear architecture and code-quality boundaries.
 - Understand and apply OOP, SOLID, DRY, clean-code, maintainability,
-  extensibility, and established architecture-pattern principles where they fit
-  the stack, including clean architecture, microservices, DDD, and equivalent
-  stack-appropriate patterns.
+  extensibility, and established design and architecture-pattern principles
+  where they fit the stack, including GoF, GRASP, clean architecture,
+  microservices, DDD, and equivalent stack-appropriate patterns.
 - Prefer cohesive domain models, explicit interfaces at integration boundaries,
   dependency inversion for infrastructure, small composable modules, typed or
   validated contracts, low duplication, clear names, focused functions/classes,
@@ -58,6 +58,10 @@ across stacks.
   architecture, hexagonal/ports-and-adapters, clean architecture,
   domain-driven design, microservices, feature modules, MVC/MVVM, repository
   adapters, command handlers, and explicit service contracts.
+- Use GoF, GRASP, and similar design patterns by intent, not by name-dropping:
+  identify the force they solve, such as object creation, dependency direction,
+  variation, orchestration, state, or responsibility assignment, then choose the
+  simplest pattern that preserves clarity.
 - Preserve user-visible behavior during refactors unless the user explicitly
   changes the agreement.
 
@@ -111,6 +115,8 @@ Before finishing architecture-sensitive work, check the changed area for:
   those as development or operational work;
 - new abstractions that add ceremony without reducing duplication or protecting
   an important boundary.
+- design-pattern usage that obscures simple behavior, duplicates framework
+  conventions, or exists only because a pattern could be applied.
 
 ## Verification
 

@@ -17,6 +17,7 @@ tools/project-memory/embedding-cache/
 tools/project-memory/semantic-corpus*.jsonl
 tools/project-memory/__pycache__/
 tools/project-memory/devops.local.json
+tools/project-memory/game-modding.local.json
 tools/deploy/deploy-gateway.local.json
 tools/summary/*.tmp
 *.log

@@ -65,6 +65,19 @@ role selection into ceremony when a simple task has an obvious owner.
 
 - For broad tasks, quickly identify the lead role and any required supporting
   roles before planning or editing.
+- When a development effort begins, infer the most useful lead role from the
+  current project goal, stack inventory, README or runbook, project memory,
+  manifests, and the user's requested work after the initial context load.
+  Briefly propose that role, or the smallest useful role set, before the first
+  implementation plan when it would improve direction or review quality.
+- If the best role is obvious and low-risk, state it as an operating assumption
+  and continue. Ask only when several materially different role choices would
+  change scope, architecture, external systems, cost, data safety, or
+  user-visible behavior.
+- Revisit the selected role after a meaningful project pivot, such as a shift
+  from backend to frontend, from product design to deployment, or from feature
+  implementation to security review. Do not repeat role suggestions on every
+  minor task in the same thread.
 - For startup-style delivery, use the product owner to preserve the business
   outcome, the tech lead to choose the smallest reliable implementation path,
   the relevant stack engineer to implement, and QA/release roles to verify.

@@ -1,12 +1,13 @@
 {
-  "instruction_kit_version": "2026.07.08.1",
+  "instruction_kit_version": "2026.07.14.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
     "source_repo": "https://github.com/Dimosfil/general-instructions.git",
     "source_cache_path": "",
     "shared_library_path": "",
-    "enabled": true
+    "enabled": true,
+    "auto_apply_pending_migrations": true
   },
   "applied_migrations": [
     "2026.05.16.1__add_skill_modules",
@@ -162,7 +163,14 @@
     "2026.07.06.5__require_latest_summary_for_gi_start",
     "2026.07.07.1__clarify_gi_init_github_source",
     "2026.07.07.2__add_gi_logic_command",
-    "2026.07.08.1__add_answer_first_response_style"
+    "2026.07.08.1__add_answer_first_response_style",
+    "2026.07.08.2__expand_startup_engineering_stack_expectations",
+    "2026.07.08.3__suggest_development_roles_from_project_context",
+    "2026.07.08.4__add_gi_mod_game_path_command",
+    "2026.07.10.1__harden_gi_init_bootstrap_entrypoint",
+    "2026.07.13.1__enforce_git_finalization_boundary",
+    "2026.07.13.2__keep_one_off_probes_out_of_tools",
+    "2026.07.14.1__require_startup_migration_auto_apply"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -217,6 +225,8 @@
     "patterns/AGENTS_RUNTIME/15-verification.md",
     "patterns/AGENTS_RUNTIME/16-git-policy.md",
     "patterns/AGENTS_RUNTIME/17-agent-role-office.md",
-    "patterns/AGENTS_RUNTIME/18-startup-product-engineering.md"
-  ]
+    "patterns/AGENTS_RUNTIME/18-startup-product-engineering.md",
+    "patterns/AGENTS_RUNTIME/19-game-modding.md"
+  ],
+  "last_update_check_at": "2026-07-14T13:47:25+03:00"
 }

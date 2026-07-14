@@ -1,5 +1,8 @@
 # Shared Instructions Bootstrap
 
+Read root `BOOTSTRAP.md` first when the source provides it. It is the compact,
+high-discoverability entrypoint for this full contract.
+
 Use this when a user starts a new project by giving the canonical
 shared-instruction Git repository or a local checkout/cache, for example:
 
@@ -7,6 +10,7 @@ shared-instruction Git repository or a local checkout/cache, for example:
 Connect shared instructions: https://github.com/Dimosfil/general-instructions.git
 gi init https://github.com/Dimosfil/general-instructions.git
 gi init Dimosfil/general-instructions.git
+инит [Dimosfil/general-instructions.git](https://github.com/Dimosfil/general-instructions.git)
 ```
 
 Also use this when the user asks to update from a shared instruction library but
@@ -24,6 +28,11 @@ local checkout/cache when needed, and deploy a local instruction kit into the
 current project. The source may be the full GitHub URL, the shorter
 `Dimosfil/general-instructions.git` repo form, a Markdown link to either form,
 or an existing local checkout/cache.
+
+Resolve a Markdown link target before classifying the command. The default
+target is the active project root, independently of the source checkout path or
+drive. Store the canonical GitHub URL as the update source; store a local path
+only as optional cache metadata.
 
 It does not mean:
 
@@ -82,6 +91,16 @@ It does not mean:
    `https://github.com/Dimosfil/general-instructions.git`. Store a local path
    only as optional checkout/cache metadata, not as the canonical source.
 9. Stop after setup and ask what the user wants to do next.
+
+For a fresh target, prefer the resolved checkout's deterministic installer:
+
+```powershell
+.\tools\install-instruction-kit.ps1 -TargetPath <current-project-root>
+```
+
+The installer creates missing files and preserves existing files. If local
+instruction files already exist, inspect them and merge missing rules carefully
+after the installer reports them as preserved.
 
 ## Token Rules
 

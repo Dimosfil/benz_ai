@@ -82,6 +82,13 @@
   Inspect status, keep unrelated/user changes out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
+- Complete every task-scoped tracked write, including handoff and generated
+  metadata updates, before staging. After the last commit or push and the last
+  filesystem mutation, recheck `git status --short`; for pushes also verify the
+  local branch matches its configured upstream. HEAD equality alone does not
+  prove a clean worktree. Never report a complete clean finish while a new
+  task-scoped diff remains, and do not modify tracked task files after the final
+  check without repeating the authorized finish workflow and verification.
 - Treat `gi пул`, `gi pull`, and `ги пул` as explicit requests to fetch and pull
   the current branch from its configured upstream. Inspect status, branch, and
   upstream first. Resolve only obvious, low-risk conflicts where intent is clear

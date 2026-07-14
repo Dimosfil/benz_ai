@@ -31,6 +31,19 @@ comparison to a named repository or product.
   or runbooks, and generated/evidence files in project-local artifact,
   evidence, output, data, docs-asset, build, or release locations documented by
   the project.
+- File type does not establish durability. A `.py`, `.ps1`, shell script, or
+  other executable made for one research question, environment probe, scrape,
+  data inspection, or temporary diagnostic is a one-off work file. Do not put
+  it under `tools/`, including convenient-looking subtrees such as
+  `tools/research/`, `tools/probes/`, or `tools/scratch/`, unless that subtree is
+  an already documented reusable subsystem and the new script satisfies its
+  stable contract. Prefer inline execution; otherwise use a documented ignored
+  scratch/temp location outside `tools/`, remove the script after use, and keep
+  only necessary evidence or outputs in their documented artifact location.
+- Promote a script to durable tooling only when the project has an expected
+  future caller, reusable project-owned behavior, a stable invocation contract,
+  and enough documentation or verification to maintain it. A useful result in
+  the current task alone is not sufficient.
 - Treat `tools/project-memory/` as a narrow exception for compact
   implementation-driving specifications, decisions, contracts, and evidence
   references used by agents. It is not a source package, plugin directory,

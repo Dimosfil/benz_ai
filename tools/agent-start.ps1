@@ -97,7 +97,7 @@ function Write-InstructionKitUpdateNotice {
         Write-Host "== Instruction Kit Update =="
         Write-Host "Installed: $installedVersion"
         Write-Host "Available: $latestVersion"
-        Write-Host "Review $sharedPath\CHANGELOG.md or run gi обновить to refresh from the configured source repo."
+        Write-Host "Accepted update detected. The first-task startup check must apply pending migrations before task work unless it reports a concrete blocker."
     }
 }
 

@@ -52,6 +52,17 @@
   compact implementation-driving specifications and evidence references, but
   it must not become the only product documentation layer or a home for source,
   tests, runtime packages, generated outputs, or bulky evidence.
+- Classify scripts by lifecycle and reuse, not by extension. A Python,
+  PowerShell, shell, or other executable created only to answer the current
+  research question, probe one environment, scrape one source, inspect one data
+  case, or run a throwaway diagnostic is one-off work, not durable tooling. Do
+  not place it in `tools/`, `tools/research/`, `tools/probes/`, or a similarly
+  named tooling subtree. Prefer an inline command; if a file is necessary, use
+  a documented ignored project scratch/temp location outside `tools/`, remove
+  it after use, and store only required outputs in the documented evidence or
+  artifact location. Promote a script into `tools/` only when it has a
+  project-owned reusable purpose, stable interface, documentation, and an
+  expected future caller.
 - Do not hard-code values that can change by deployment, user choice, runtime
   environment, host machine, service discovery, credentials, filesystem layout,
   feature flags, product names, demo data, workflow labels, generated artifact
@@ -98,8 +109,13 @@
   the smallest useful set of professional role lenses, such as product owner,
   tech lead, C#/.NET backend, frontend, UI/UX design, visual art, QA,
   DevOps/release, security, or documentation, then synthesize their input into
-  one accountable plan, implementation, or review. Add new reusable roles only
-  when repeated work shows a real specialty gap. Follow
+  one accountable plan, implementation, or review. When development begins,
+  infer and briefly propose the most useful lead role or smallest role set from
+  the project context after initial context loading; continue on an obvious
+  low-risk assumption and ask only when the role choice would materially change
+  scope, architecture, external systems, cost, data safety, or user-visible
+  behavior. Add new reusable roles only when repeated work shows a real
+  specialty gap. Follow
   `patterns/AGENT_ROLE_OFFICE.md`.
 - Treat startup-style product engineering as delivery of a working business
   outcome, not isolated code snippets. Agents should clarify business value,

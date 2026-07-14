@@ -54,6 +54,44 @@ clearly enough that a team can continue the work.
   logging, idempotency, retries, timeouts, failure handling, and targeted tests
   should match the blast radius.
 
+## AI Integration Expectations
+
+- Treat LLM integration as business orchestration, not a loose prompt call.
+  Keep prompt assembly, model routing, tool/function calls, retrieval,
+  embedding, caching, safety filters, and business decisions behind explicit
+  contracts that can be tested or inspected.
+- For RAG work, verify source selection, chunking, embedding model/version,
+  metadata, retrieval thresholds, reranking, grounding, citation or evidence
+  behavior, freshness, and fallback paths before changing answer behavior.
+- Use semantic cache, prompt tuning, batching, model routing, retrieval filters,
+  and deterministic preprocessing to reduce token and infrastructure cost only
+  when they preserve correctness, privacy, and observability.
+- Keep provider-specific SDKs and model IDs behind adapters or configuration.
+  Do not bury prompts, ranking thresholds, embedding choices, or cache policy in
+  unrelated domain code.
+
+## Data And PostgreSQL Expectations
+
+- For PostgreSQL-backed work, inspect query shape, indexes, transaction
+  boundaries, isolation assumptions, migrations, connection pooling, locking,
+  timeout behavior, and data volume before making persistence changes.
+- Prefer parameterized queries or ORM-safe APIs, explicit constraints,
+  idempotent migrations, and measured query plans for performance-sensitive
+  changes.
+- Treat indexes, denormalization, caching, and transaction retries as design
+  choices with read/write tradeoffs; verify them against current access
+  patterns instead of adding them speculatively.
+
+## CI/CD And DevOps Expectations
+
+- For GitLab or similar CI/CD work, read the current pipeline, runner,
+  environment, secret, artifact, cache, migration, deploy, rollback, and branch
+  protection contracts before editing.
+- Keep build, test, package, migration, release, and deployment steps
+  reproducible and observable. Do not hard-code environment-specific values
+  that belong in CI variables, deployment manifests, service discovery, or
+  documented project configuration.
+
 ## Frontend Expectations
 
 - For Angular, React, Vue, or similar frontend work, follow the existing

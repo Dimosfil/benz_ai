@@ -18,6 +18,20 @@
   shared mutable state races, duplicate side effects, and retry storms. Bound
   parallelism and make concurrency failure behavior observable and testable
   enough for the risk.
+- For AI integration, keep prompts, retrieval, model routing, tool calls,
+  embeddings, semantic cache, and provider SDKs behind explicit contracts,
+  adapters, configuration, and verification; optimize token and infrastructure
+  cost only when correctness, privacy, and observability stay intact.
+- For PostgreSQL-backed work, check query shape, indexes, transactions,
+  isolation, migrations, connection pooling, locking, and timeout behavior
+  before changing persistence; verify performance-sensitive changes against
+  current access patterns.
+- For architecture-sensitive code, apply GoF, GRASP, SOLID, DRY, KISS, and
+  clean-code principles by intent and proportionality. Avoid abstractions that
+  add ceremony, duplicate framework conventions, or hide simple behavior.
+- For GitLab or similar CI/CD work, read the current pipeline, runner,
+  environment, secret, artifact, cache, migration, deploy, rollback, and branch
+  protection contracts before editing.
 - For Angular, React, Vue, or similar frontend work, follow existing routing,
   state, forms, API, component, styling, test, and build conventions. Do not
   introduce a new framework, UI kit, state manager, or styling architecture

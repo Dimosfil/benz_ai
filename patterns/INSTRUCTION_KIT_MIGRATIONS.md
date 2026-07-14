@@ -28,6 +28,24 @@ only in source-only files, or only in copied templates.
 Fresh bootstraps should treat the copied version as a baseline and record all
 migrations included in that version as already applied.
 
+## Startup Auto-Application Contract
+
+- `update_check.enabled: true` authorizes the first-concrete-task startup check
+  to resolve the accepted source and apply pending accepted migrations.
+- `auto_apply_pending_migrations` defaults to `true` when absent so older
+  installed metadata remains eligible for automatic application. New metadata
+  should record it explicitly under `update_check`.
+- An agent must not treat the lack of a separate user command, confirmation, or
+  explicit `auto_apply_pending_migrations` field as a blocker. A detected newer
+  version must lead to migration application or a named concrete blocker, not
+  only an availability notice.
+- Automatic application may be skipped only when `update_check.enabled` or
+  `auto_apply_pending_migrations` is explicitly `false`, or when source access,
+  write permissions, repository scope, safety, unrelated dirty-file overlap, or
+  a merge conflict prevents a safe update.
+- Apply and verify file changes before advancing migration metadata. This
+  authorization does not turn helper-script `-Apply` into a metadata shortcut.
+
 ## Project Command
 
 When the user says:

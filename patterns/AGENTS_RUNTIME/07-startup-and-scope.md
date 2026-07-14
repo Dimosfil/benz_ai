@@ -10,8 +10,15 @@
   `tools/project-memory/instruction-kit.json` when present, resolve the accepted
   shared-instruction source, and read only `VERSION.md`, `CHANGELOG.md`,
   `INDEX.md`, and pending files under `migrations/`. Apply pending accepted
-  migrations when the local update contract allows it; otherwise report the
-  compact blocker and continue with current local instructions unless the user
+  migrations before continuing with task-specific work. In instruction-kit
+  metadata, `update_check.enabled: true` authorizes both checking and applying;
+  a missing `auto_apply_pending_migrations` field defaults to `true` for
+  backward compatibility. Finding a newer version is not a completed startup
+  check: do not merely report it or tell the user to run a later update command.
+  Skip application only when metadata explicitly sets the update check or
+  automatic application to `false`, or when a concrete source-access,
+  filesystem, repository-scope, safety, or merge-conflict blocker exists.
+  Name the blocker and continue with current local instructions unless the user
   explicitly requested `gi обновить`. Do not read `updates/`, old chat examples,
   broad project files, or unrelated source repositories for this startup check.
   Keep the user-facing output to one compact status line or include it in the

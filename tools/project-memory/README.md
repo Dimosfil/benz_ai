@@ -36,6 +36,13 @@ implementations, product tests, full product documentation, product outputs,
 and selected-run artifacts need the project's normal source, test,
 documentation, output, evidence, data, build, release, or docs-asset locations.
 
+Executable file type does not make a script durable tooling. Keep single-task
+research probes, exploratory scripts, ad hoc collectors, and throwaway
+diagnostics out of `tools/`, `tools/research/`, `tools/probes`, and similar
+subtrees. Prefer inline execution or the project's documented ignored
+scratch/temp location outside `tools`; remove the temporary script after use
+and preserve only required evidence in its normal artifact location.
+
 ## Documentation Versus Summary Versus Project Memory
 
 `README.md`, `docs/`, and runbooks are the project documentation layer.

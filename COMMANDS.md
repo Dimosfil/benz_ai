@@ -77,6 +77,10 @@ gi logic
 ги логика
 gi logic <source> [focus]
 ги логика <ссылка-или-путь> [фокус]
+gi mod
+ги мод
+gi mod path <game-install-path>
+ги мод путь <путь-игры>
 gi build
 gi собрать
 gi rebuild
@@ -215,6 +219,7 @@ the listed commands.
 | `gi info`, `ги инфо` | Find or build the current project's purpose, visible functionality, and stack overview. |
 | `gi stack`, `ги стек` | Find or build the current project's verified technology stack inventory. |
 | `gi logic`, `ги логика`, `gi logic <source> [focus]` | Find, document, or adapt core project logic; with a source path/URL, study that explicit external project narrowly and map portable logic into the current project. |
+| `gi mod`, `ги мод`, `gi mod path <game-install-path>`, `ги мод путь <путь-игры>` | Prepare a game modding project by verifying and recording the selected local game install path separately from mod and log folders. |
 | `gi build`, `gi собрать`, `ги билд`, `ги собрать`, `gi rebuild`, `ги ребилд` | Build/rebuild the current project/application only, producing a release/upload-ready artifact such as a static `dist/`, package, executable, or other documented build output. |
 | `gi tools rebuild`, `gi rag rebuild`, `ги тулс ребилд`, `ги раг ребилд` | Rebuild the full configured GI/project-memory/RAG system after confirmation. |
 | `gi tools rebuild sql`, `gi rag rebuild sql` | Rebuild only the SQL/FTS structured-memory node. |
@@ -334,9 +339,11 @@ rule gap, обновляет live rules, copied-project templates, accepted migr
 
 ```text
 Connect shared instructions: https://github.com/Dimosfil/general-instructions.git
+инит [Dimosfil/general-instructions.git](https://github.com/Dimosfil/general-instructions.git)
 ```
 
 Агент:
+- сначала разрешает URL Markdown-ссылки и читает корневой `BOOTSTRAP.md`
 - читает общие правила и нужные шаблоны
 - создаёт локальные `AGENTS.md`, `tools/AGENT_WORKING_AGREEMENTS.md`,
   `tools/AGENT_RUNBOOK.md`, `tools/agent-start.ps1` и project memory files
@@ -345,6 +352,10 @@ Connect shared instructions: https://github.com/Dimosfil/general-instructions.gi
   `gi init Dimosfil/general-instructions.git`, and Markdown links to that repo
   as GI instruction bootstrap, not as ordinary git repository initialization or
   remote replacement
+- uses the active project root as the default target without requiring a
+  machine-specific drive or local shared-library path
+- prefers `tools/install-instruction-kit.ps1` from the resolved source checkout
+  for deterministic fresh-project setup and preserves existing local files
 - не трактует `инит <path-to-general-instructions>` или
   `инит правила <path-to-general-instructions>` как `git init`; не создаёт
   папки, `.git`, `npm init` или `python -m venv` для этой формы
@@ -519,6 +530,81 @@ updates durable project memory with source/evidence mapping, and runs the
 smallest documented checks that cover the adopted behavior. If the source is a
 web URL, prefer official repository/docs pages and avoid crawling unrelated
 pages or downloading large assets unless the user asks for that scope.
+
+### GI Mod / Game Path
+
+```text
+gi mod
+ги мод
+gi mod path <game-install-path>
+ги мод путь <путь-игры>
+gi game path <game-install-path>
+ги путь игры <путь-игры>
+```
+
+`gi mod` / `ги мод` asks the agent to prepare or inspect the current project as
+a game modding project. Before editing, installing, building, or debugging a
+mod, the agent must distinguish the current mod project root, the selected game
+install root, the user/game documents mod folder, and the logs or crash-report
+folder. The agent must not present a known mod folder or log folder as the game
+install folder.
+
+`gi mod path <game-install-path>` / `ги мод путь <путь-игры>` records the
+selected local game install root for the current mod project. The supplied path
+is user authorization for this scoped modding configuration task only. The
+agent resolves the path to an absolute path, verifies it exists, and checks for
+game-specific evidence such as an executable, launcher manifest, app manifest,
+modding SDK folder, data/content folder, or project runbook match.
+
+The selected game install path is machine-local configuration. Store it in an
+ignored local file, preferably `tools/project-memory/game-modding.local.json`,
+with non-secret fields such as `game_name`, `game_install_path`,
+`mod_install_path`, `logs_path`, `launcher`, `detected_from`, `verified_at`,
+and evidence notes. Do not commit absolute local game paths to shared
+instructions, migrations, templates, source code defaults, or normal project
+docs. Durable project memory may keep the portable modding workflow and the
+roles of each folder, but not the user's machine-specific game path.
+
+If the game path is not recorded, the agent first checks project-local
+instructions, README, runbooks, manifests, existing ignored modding config, and
+project memory. If still missing, the agent may inspect only safe common
+launcher library metadata when local policy and user scope allow it. It must
+not scan arbitrary user-home folders, sibling projects, or whole drives unless
+the user explicitly asks to find the game on that scope.
+
+If the game install root remains unknown, the agent asks one concise question
+instead of merely saying it does not know. The question names the missing path
+role and the exact save target, for example:
+
+```text
+I found the mod project and local mod/log folders, but not the game install root.
+Please send the game install folder, and I will save it in
+tools/project-memory/game-modding.local.json for this project.
+```
+
+Russian response shape:
+
+```text
+Я нашел проект мода и локальные папки мода/логов, но не доказал путь установки
+игры. Пришли папку установки игры, и я сохраню ее в
+tools/project-memory/game-modding.local.json для этого проекта.
+```
+
+When a path is supplied, the response should be concrete:
+
+```text
+I will record this as the selected game install path for this mod project,
+verify it exists, keep it in ignored local config, and use it for future
+build/install/debug commands.
+```
+
+Russian response shape:
+
+```text
+Запишу это как выбранный путь установки игры для этого мод-проекта, проверю что
+папка существует, сохраню в ignored local config и буду использовать для будущих
+build/install/debug команд.
+```
 
 ### Build/Rebuild Project
 
@@ -1008,6 +1094,12 @@ changes, remote и ветку. Коммитит только изменения 
 предыдущего terminal push или push-only действием; если scoped изменений для
 commit нет, агент сообщает это вместо push-only fallback. Push без нового
 commit выполняется только по `gi только пуш`. При блокерах — кратко объясняет.
+Все task-scoped записи, включая handoff и generated metadata, завершаются до
+staging. После последнего commit/push и последней записи агент снова
+проверяет `git status --short`, а для push — и совпадение с upstream. Совпадение HEAD
+не доказывает чистое working tree: при новом task-scoped diff нельзя сообщать о
+полном успехе. После final status check tracked task-файлы не меняются без повтора
+разрешённого finish workflow и проверки.
 
 Для `gi пул` агент проверяет состояние рабочей копии, текущую ветку и upstream,
 затем делает `git fetch` и подтягивает текущую ветку. Если появляются

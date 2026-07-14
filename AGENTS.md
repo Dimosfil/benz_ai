@@ -26,8 +26,13 @@ simple local run workflow.
   loaded GI rules.
 - On the first concrete task in a new chat/session, run a quiet GI update check:
   read `tools/project-memory/instruction-kit.json` and the accepted source
-  `VERSION.md`/`migrations/`, then report the pending migration count. Do not
-  read `updates/` for this startup check.
+  `VERSION.md`/`migrations/`, then apply pending accepted migrations. Treat
+  `update_check.enabled: true` as authorization to check and apply; when
+  `auto_apply_pending_migrations` is absent, default it to `true` for backward
+  compatibility. Do not stop at “update available” or defer to `gi update`.
+  Skip application only for an explicit `false` setting or a concrete blocker,
+  name that blocker, and report the pending migration count. Do not read
+  `updates/` for this startup check.
 - If the request contains a GI chat command such as `gi ...`, `ги ...`, `init`,
   or `инит`, first read `COMMANDS.md` when present, then read every runtime
   module routed to that command before acting.
@@ -90,6 +95,8 @@ the latest handoff summary in `tools/summary/`, `tools/AGENT_RUNBOOK.md`,
 - Startup product engineering, business-first delivery, frontend expectations,
   and professional communication:
   `patterns/AGENTS_RUNTIME/18-startup-product-engineering.md`
+- Game modding projects, `gi mod`, and selected game install path handling:
+  `patterns/AGENTS_RUNTIME/19-game-modding.md`
 
 ## Durable Memory
 
@@ -141,6 +148,13 @@ Build:
 - Outputs/evidence/build artifacts: keep out of source unless documented
 - Summaries: `tools/summary/`
 - Project memory: `tools/project-memory/`
+
+Do not classify a script as durable tooling merely because it is executable.
+Single-task research probes, exploratory scripts, ad hoc collectors, scrapers,
+and throwaway diagnostics do not belong in `tools/`, including new
+`tools/research`, `tools/probes`, or `tools/scratch` subtrees. Prefer an inline
+command or a documented ignored scratch/temp location outside `tools`; remove
+temporary scripts after use and retain only necessary evidence or outputs.
 
 ## Local Rules
 

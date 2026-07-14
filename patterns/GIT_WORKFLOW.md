@@ -53,6 +53,9 @@ language preferences.
 
 Before any `gi коммит`, `gi пуш`, `gi коммит пуш`, or `gi только пуш` action:
 
+- finish every task-scoped filesystem write first, including project-memory,
+  handoff, generated metadata, formatting, and verification-driven corrections;
+  do not create or update a tracked task artifact after staging or committing;
 - inspect `git status --short`;
 - inspect staged and unstaged changes with compact stats or targeted checks;
 - identify the current branch and configured remote;
@@ -80,6 +83,22 @@ For `gi только пуш`:
 - do not stage files;
 - do not create a commit;
 - push only already committed local work on the current branch.
+
+After the last commit or push and before the success response:
+
+- run a final `git status --short` after the last filesystem mutation;
+- verify the resulting commit contains every intended task-scoped tracked
+  change, and for a push verify the local branch matches its configured
+  upstream;
+- distinguish pre-existing unrelated dirt from new task-scoped residue; never
+  claim a clean worktree merely because local and remote HEAD match;
+- if a required task file was changed after the commit, do not silently leave
+  it behind or report full success: include it through the authorized finish
+  workflow before pushing, or report the exact uncommitted remainder and the
+  operation as incomplete;
+- do not mutate tracked task files after this final status check. If another
+  mutation becomes necessary, repeat verification and the applicable authorized
+  finish workflow before responding.
 
 ## Pull Workflow
 
