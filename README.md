@@ -63,13 +63,12 @@ TELEGRAM_BOT_TOKEN=123456789:real-token-goes-here
 docker compose build
 docker compose up -d
 docker compose ps
-Invoke-RestMethod -Uri http://127.0.0.1:8000/api/health
+Invoke-RestMethod -Uri http://127.0.0.1:3000/api/health
 ```
 
-Docker публикует сайт на `http://localhost:8000`. Чтобы выбрать другой внешний
-порт, задайте `BENZ_AI_HOST_PORT` только для Compose-команды или в локальном
-`.env`; внутри контейнера приложение всегда слушает 3000. Пока используется
-Telegram long polling, запускайте только одну
+Если внешний порт 3000 занят, задайте `BENZ_AI_HOST_PORT` только для
+Compose-команды или в локальном `.env`; внутри контейнера приложение всегда
+слушает 3000. Пока используется Telegram long polling, запускайте только одну
 реплику приложения: несколько реплик с одним bot token будут конкурировать за
 updates. Остановка:
 
