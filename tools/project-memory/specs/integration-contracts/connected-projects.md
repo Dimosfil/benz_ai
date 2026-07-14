@@ -80,6 +80,34 @@
 - Evidence: live Chromium/CDP request performed from this project on
   2026-07-10.
 
+## Alfa AZS
+
+- Purpose: общероссийский каталог АЗС, опубликованные цены и вероятностные
+  статусы топлива на основе транзакционной активности.
+- Canonical URL: `https://alfabank.ru/`.
+- Verified endpoint:
+  `GET /api/v1/azs-stations/public/stations?g=[<lon>,<lat>]&z=<zoom>`.
+- Verified on 2026-07-14: HTTP 200 JSON после защитного ответа 307 и повторного
+  запроса с выданными cookies; массив содержал 16 537 станций.
+- Verified station fields: `_id`, `station_id`, `brand`, `address`, `fuels`,
+  `partner_stations`; координаты находятся в `address.location`.
+- Fuel categories: `AI92`, `AI95`, `AI98_100`, `DIESEL`. Наблюдавшиеся статусы:
+  `available`, `probably_unavailable`, `unknown`, `unavailable`, `closed`.
+- Access behavior: браузероподобный Node HTTP-клиент получает cookies `spid` и
+  `spsc` из первого 307-ответа и повторяет запрос. Chromium не требуется;
+  cookies остаются только в памяти процесса.
+- Territory boundary: параметры `g` и `z` не доказали серверную фильтрацию —
+  запрос с центром Воронежа вернул общероссийский снимок. Приложение кэширует
+  один снимок и фильтрует его по bbox, а итоговую выдачу — по административному
+  контуру.
+- Data semantics: цена не подтверждает остаток; время последней транзакции
+  относится к availability-наблюдению и не подменяет время публикации цены.
+- Access boundary: только пользовательские поиски, глобальный кэш 60 секунд,
+  без фонового обхода регионов. Контракт публично не документирован и требует
+  согласованного доступа перед production-публикацией.
+- Evidence: контролируемые PowerShell и Node.js запросы из этого проекта от
+  2026-07-14.
+
 ## ГдеБЕНЗ
 
 - Purpose: бесплатная краудсорсинговая карта пользовательских отметок о

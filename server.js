@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { buildInfo } from "./build-info.js";
 import { inGeoBoundary, mergeStations, summarizeStations } from "./domain/stations.js";
+import { clearAlfaCache, fetchAlfa } from "./providers/alfa.js";
 import { fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
 import { clearGdebenzCache, fetchGdebenz } from "./providers/gdebenz.js";
 import { clearMultigoCache, fetchMultigo } from "./providers/multigo.js";
@@ -60,14 +61,16 @@ async function searchStations(bbox) {
   const saved = resultCache.get(key);
   if (saved && Date.now() - saved.createdAt < config.resultCacheTtlMs) return { ...saved.value, cached: true };
 
-  const [tbankResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled([
+  const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled([
     fetchTbank(bbox),
+    fetchAlfa(bbox),
     fetchSber(sberWorker, bbox),
     fetchBenzup(bbox),
     fetchGdebenz(bbox),
     fetchMultigo(bbox),
   ]);
   const tbank = fulfilled(tbankResult);
+  const alfa = fulfilled(alfaResult);
   const sber = fulfilled(sberResult);
   const benzup = fulfilled(benzupResult);
   const gdebenz = fulfilled(gdebenzResult);
@@ -79,6 +82,9 @@ async function searchStations(bbox) {
     stations.push(...tbank.stations);
     if (tbank.truncated) warnings.push("Область очень велика: достигнут лимит запросов T-Bank, сводка может быть неполной.");
   } else warnings.push(providerFailureMessage(tbankResult, "T-Bank"));
+
+  if (alfa) stations.push(...alfa.stations);
+  else warnings.push(providerFailureMessage(alfaResult, "Alfa AZS"));
 
   if (sber) {
     stations.push(...sber.stations);
@@ -106,6 +112,7 @@ async function searchStations(bbox) {
     warnings: warnings.filter(Boolean),
     sourceRequests: {
       tbank: tbank?.requests || 0,
+      alfa: alfa?.cached ? 0 : 1,
       sber: sber ? 1 : 0,
       benzup: benzup?.configured ? 1 : 0,
       gdebenz: gdebenz ? 1 : 0,
@@ -118,6 +125,18 @@ async function searchStations(bbox) {
         configured: true,
         role: "availability",
         error: providerFailureMessage(tbankResult, "T-Bank"),
+      },
+      alfa: {
+        available: Boolean(alfa?.available),
+        configured: true,
+        role: "availability_and_prices",
+        refreshedAt: alfa?.fetchedAt ? new Date(alfa.fetchedAt).toISOString() : null,
+        refreshSeconds: config.alfa.cacheTtlMs / 1000,
+        returned: alfa?.returned || 0,
+        included: alfa?.stations.length || 0,
+        droppedOutside: alfa?.droppedOutside || 0,
+        invalidCoordinates: alfa?.invalidCoordinates || 0,
+        error: providerFailureMessage(alfaResult, "Alfa AZS"),
       },
       sber: {
         available: Boolean(sber?.available),
@@ -171,6 +190,7 @@ async function searchStations(bbox) {
 
 function clearAllCaches() {
   resultCache.clear();
+  clearAlfaCache();
   clearGeocoderCache();
   clearYandexCache();
   clearGdebenzCache();

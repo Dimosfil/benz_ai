@@ -101,6 +101,7 @@ const statusText = {
 
 const sourceText = {
   tbank: "T‑Bank",
+  alfa: "Alfa",
   sber: "Sber",
   benzup: "BenzUp",
   yandex: "Яндекс",

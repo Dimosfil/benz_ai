@@ -7,6 +7,7 @@ export const labels = Object.freeze({
 
 export const sourceNames = Object.freeze({
   tbank: "T‑Bank Fuel",
+  alfa: "Alfa AZS",
   sber: "Sber AZS",
   gdebenz: "ГдеБЕНЗ",
   benzup: "BenzUp",

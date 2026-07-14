@@ -30,6 +30,14 @@ export const config = Object.freeze({
     maxRequests: 40,
     maxSplitDepth: 4,
   }),
+  alfa: Object.freeze({
+    url: process.env.ALFA_AZS_API_URL || "https://alfabank.ru/api/v1/azs-stations/public/stations",
+    pageUrl: process.env.ALFA_AZS_PAGE_URL || "https://alfabank.ru/",
+    userAgent: process.env.ALFA_AZS_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138 Safari/537.36",
+    cacheTtlMs: positiveInteger(process.env.ALFA_AZS_CACHE_TTL_MS, 60_000),
+    timeoutMs: positiveInteger(process.env.ALFA_AZS_TIMEOUT_MS, 30_000),
+    zoom: positiveInteger(process.env.ALFA_AZS_ZOOM, 14),
+  }),
   benzup: Object.freeze({
     url: process.env.BENZUP_API_URL || "https://api.omt-consult.ru/v2/stations",
     token: process.env.BENZUP_API_TOKEN || "",
