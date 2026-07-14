@@ -36,6 +36,7 @@ const count = document.querySelector("#count");
 const meta = document.querySelector("#meta");
 const template = document.querySelector("#station");
 const overview = document.querySelector("#overview");
+const statusLegend = document.querySelector("#status-legend");
 const findButton = document.querySelector("#find");
 const refreshButton = document.querySelector("#refresh-cache");
 const buildInfoNode = document.querySelector("#build-info");
@@ -215,6 +216,7 @@ function metric(value, label) {
 
 function renderSummary(data) {
   overview.hidden = false;
+  statusLegend.hidden = false;
   document.querySelector("#place-name").textContent = data.location.name;
   document.querySelector("#place-meta").textContent = data.location.displayName;
   const summary = data.summary;
@@ -244,13 +246,6 @@ function renderSummary(data) {
     return row;
   });
   document.querySelector("#fuel-summary").replaceChildren(...fuelRows);
-  const brands = summary.brands.map(({ name, count }) => {
-    const chip = document.createElement("span");
-    chip.className = "brand";
-    chip.textContent = `${name} · ${count}`;
-    return chip;
-  });
-  document.querySelector("#brand-summary").replaceChildren(...brands);
   document.querySelector("#attribution").textContent = `Геокодирование: ${data.location.attribution}. Доступность топлива носит вероятностный характер.`;
   renderBuildInfo(data.build);
 }
@@ -365,6 +360,7 @@ async function loadSummary({ refresh = false } = {}) {
   } catch (error) {
     allStations = [];
     overview.hidden = true;
+    statusLegend.hidden = true;
     renderStations();
     notice.hidden = false;
     notice.textContent = error instanceof Error ? error.message : "Не удалось получить сводку.";

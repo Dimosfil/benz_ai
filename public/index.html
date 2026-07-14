@@ -19,7 +19,6 @@
         <div id="source-status" class="source-status" aria-label="Состояние источников"></div>
         <div class="breakdown">
           <section><h3>По видам топлива</h3><div id="fuel-summary"></div></section>
-          <section><h3>Частые названия АЗС</h3><div id="brand-summary" class="brands"></div></section>
         </div>
       </section>
       <section class="summary"><strong id="count">—</strong><span id="meta">Введите город или область</span></section>
@@ -40,6 +39,15 @@
         </table>
       </div>
       <section id="results" class="results" aria-live="polite"></section>
+      <section id="status-legend" class="status-legend" hidden>
+        <h3>Что означают статусы</h3>
+        <div class="legend-items">
+          <div class="legend-item"><span class="badge available">Вероятно есть</span><p>Источник сообщает о наличии, и известные данные ему не противоречат.</p></div>
+          <div class="legend-item"><span class="badge maybe_available">Возможно есть</span><p>Данные неопределённые, устаревшие либо источники или выбранные виды топлива расходятся.</p></div>
+          <div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div>
+          <div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div>
+        </div>
+      </section>
       <footer><span id="attribution"></span><span id="build-info">Версия загружается…</span></footer>
     </main>
     <template id="station"><article class="station"><div><p class="source"></p><h2></h2><p class="address"></p><p class="detail"></p><a class="station-link" target="_blank" rel="noreferrer" hidden>Открыть карту</a></div><div class="right"><span class="badge"></span><p class="fuel"></p><p class="prices"></p><p class="fresh"></p></div></article></template>
