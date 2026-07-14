@@ -14,7 +14,7 @@ import { SberBrowserWorker } from "./providers/sber-browser.js";
 import { fetchTbank } from "./providers/tbank.js";
 import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelPrices } from "./providers/yandex.js";
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
-import { createBenzTelegramHandler } from "./services/telegram-bot.js";
+import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { TelegramPollingGateway } from "./services/telegram-gateway.js";
 
 export { mergeStations, normalizeBenzupStation, normalizeSberStation, isYandexVerificationCandidate, parseYandexFuelPrices };
@@ -216,7 +216,7 @@ export function startServer(port = config.port) {
       clearAllCaches();
       return summaryFor(query);
     },
-  }), config.telegram);
+  }), { ...config.telegram, ...TELEGRAM_BOT_PROFILE });
   if (config.telegram.enabled && !telegramGateway.isConfigured()) {
     throw new Error("TELEGRAM_POLLING_ENABLED=true requires a valid TELEGRAM_BOT_TOKEN.");
   }

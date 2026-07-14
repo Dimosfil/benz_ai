@@ -25,6 +25,48 @@ test("routes a Telegram place message through the shared summary use case", asyn
   assert.match(response, /АЗС найдено: 12/);
 });
 
+test("explains how to search for a city or district without starting a lookup", async () => {
+  let searches = 0;
+  const handler = createBenzTelegramHandler({
+    findSummary: async () => {
+      searches += 1;
+      throw new Error("help must not start a lookup");
+    },
+  });
+
+  const response = await handler({ text: "/help" });
+
+  assert.equal(searches, 0);
+  assert.match(response, /город: Воронеж/);
+  assert.match(response, /район города: Коминтерновский район, Воронеж/);
+  assert.match(response, /район области: Новоусманский район, Воронежская область/);
+  assert.match(response, /\/refresh Новая Усмань/);
+});
+
+test("configures Telegram commands and bot descriptions", async () => {
+  const calls = [];
+  const gateway = new TelegramPollingGateway(async () => null, {
+    token: "123456789:abcdefghijklmnopqrstuvwxyz",
+    commands: [{ command: "help", description: "Примеры поиска города и района" }],
+    description: "Полное описание",
+    shortDescription: "Краткое описание",
+    fetchImpl: async (url, options) => {
+      calls.push({ method: url.split("/").at(-1), body: JSON.parse(options.body) });
+      return { ok: true, async json() { return { ok: true, result: true }; } };
+    },
+  });
+
+  await gateway.configureBotProfile();
+
+  assert.deepEqual(calls, [
+    { method: "setMyCommands", body: { commands: [{ command: "help", description: "Примеры поиска города и района" }] } },
+    { method: "setMyDescription", body: { description: "Полное описание" } },
+    { method: "setMyShortDescription", body: { short_description: "Краткое описание" } },
+  ]);
+  assert.equal(gateway.status().botProfileConfigured, true);
+  assert.equal(gateway.status().botProfileError, null);
+});
+
 test("normalizes a Telegram update and sends the business response", async () => {
   const calls = [];
   const gateway = new TelegramPollingGateway(async (message) => `Найдено для ${message.text}`, {

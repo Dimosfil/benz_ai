@@ -12,14 +12,20 @@ export class TelegramPollingGateway {
     this.longPollSeconds = Number(options.longPollSeconds) || 20;
     this.retryDelayMs = Number(options.retryDelayMs) || 3_000;
     this.fetchImpl = options.fetchImpl || globalThis.fetch;
+    this.commands = Array.isArray(options.commands) ? options.commands : [];
+    this.description = String(options.description || "").trim();
+    this.shortDescription = String(options.shortDescription || "").trim();
     this.offset = 0;
     this.polling = false;
     this.lastError = null;
     this.lastPollAt = null;
     this.lastUpdateAt = null;
     this.processedUpdates = 0;
+    this.botProfileConfigured = false;
+    this.botProfileError = null;
     this.abortController = null;
     this.loopPromise = null;
+    this.profilePromise = null;
   }
 
   isConfigured() {
@@ -34,6 +40,8 @@ export class TelegramPollingGateway {
       lastPollAt: this.lastPollAt,
       lastUpdateAt: this.lastUpdateAt,
       processedUpdates: this.processedUpdates,
+      botProfileConfigured: this.botProfileConfigured,
+      botProfileError: this.botProfileError,
     };
   }
 
@@ -42,14 +50,35 @@ export class TelegramPollingGateway {
     if (!this.isConfigured()) throw new Error("Telegram polling requires a valid TELEGRAM_BOT_TOKEN.");
     this.polling = true;
     this.lastError = null;
+    this.botProfileError = null;
+    this.profilePromise = this.configureBotProfile().catch((error) => {
+      this.botProfileConfigured = false;
+      this.botProfileError = error instanceof Error ? error.message : String(error);
+    });
     this.loopPromise = this.pollLoop();
   }
 
   async stop() {
     this.polling = false;
     this.abortController?.abort();
-    await this.loopPromise?.catch(() => {});
+    await Promise.all([
+      this.loopPromise?.catch(() => {}),
+      this.profilePromise?.catch(() => {}),
+    ]);
     this.loopPromise = null;
+    this.profilePromise = null;
+  }
+
+  async configureBotProfile() {
+    const requests = [];
+    if (this.commands.length) requests.push(this.call("setMyCommands", { commands: this.commands }, AbortSignal.timeout(20_000)));
+    if (this.description) requests.push(this.call("setMyDescription", { description: this.description }, AbortSignal.timeout(20_000)));
+    if (this.shortDescription) {
+      requests.push(this.call("setMyShortDescription", { short_description: this.shortDescription }, AbortSignal.timeout(20_000)));
+    }
+    await Promise.all(requests);
+    this.botProfileConfigured = true;
+    this.botProfileError = null;
   }
 
   async pollOnce() {
