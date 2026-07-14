@@ -31,7 +31,7 @@ services:
       GEOCODER_USER_AGENT: "${GEOCODER_USER_AGENT:-BenzAI/0.1 Docker fuel search}"
       SOURCE_USER_AGENT: "${SOURCE_USER_AGENT:-BenzAI/0.1 Docker fuel aggregator}"
     ports:
-      - "${BENZ_AI_HOST_PORT:-3000}:3000"
+      - "${BENZ_AI_HOST_PORT:-8000}:3000"
     shm_size: 256mb
     tmpfs:
       - /tmp:size=512m,mode=1777

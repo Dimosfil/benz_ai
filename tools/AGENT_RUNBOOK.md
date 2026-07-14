@@ -33,7 +33,7 @@ Release artifact: local OCI image `benz-ai:local`.
 ```powershell
 docker compose up -d
 docker compose ps
-Invoke-RestMethod -Uri http://127.0.0.1:3000/api/health
+Invoke-RestMethod -Uri http://127.0.0.1:8000/api/health
 ```
 
 The container runs as the non-root `node` user on a read-only root filesystem.
