@@ -14,6 +14,7 @@ function disabledByDefault(value) {
 const yandexLimit = Number(process.env.YANDEX_PRICE_LIMIT || 0);
 
 export const config = Object.freeze({
+  host: process.env.HOST || "0.0.0.0",
   port: positiveInteger(process.env.PORT, 3000),
   resultCacheTtlMs: 2 * 60_000,
   sourceUserAgent: process.env.SOURCE_USER_AGENT || "BenzAI/0.1 local fuel aggregator",

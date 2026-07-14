@@ -208,7 +208,7 @@ async function summaryFor(query) {
   return { ...result, stations, location: publicLocation, summary: summarizeStations(stations) };
 }
 
-export function startServer(port = config.port) {
+export function startServer(port = config.port, host = config.host) {
   const telegramGateway = new TelegramPollingGateway(createBenzTelegramHandler({
     buildInfo,
     findSummary: summaryFor,
@@ -252,9 +252,9 @@ export function startServer(port = config.port) {
       if (error.code === "ENOENT") return json(res, 404, { error: "Не найдено" });
       json(res, 400, { error: error.message || "Ошибка сервера" });
     }
-  }).listen(port, () => {
+  }).listen(port, host, () => {
     if (config.telegram.enabled) telegramGateway.start();
-    console.log(`Benz AI: http://localhost:${port}`);
+    console.log(`Benz AI: http://${host}:${port}`);
   });
   server.on("close", () => {
     telegramGateway.stop().catch(() => {});

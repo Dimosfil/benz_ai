@@ -10,6 +10,7 @@ services:
     init: true
     restart: unless-stopped
     environment:
+      HOST: 0.0.0.0
       PORT: 3000
       CHROME_PATH: /usr/bin/chromium
       CHROME_NO_SANDBOX: "1"
