@@ -13,6 +13,11 @@
         <button id="refresh-cache" class="secondary" type="button">Обновить весь кэш</button>
       </form>
       <section id="notice" class="notice" hidden></section>
+      <nav class="view-tabs" role="tablist" aria-label="Представление результатов">
+        <button id="map-tab" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="map-panel">Карта</button>
+        <button id="table-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="table-panel" tabindex="-1">Таблица</button>
+      </nav>
+      <section id="map-panel" class="tab-panel map-panel" role="tabpanel" aria-labelledby="map-tab">
       <section id="overview" hidden>
         <div class="place"><p class="eyebrow">НАЙДЕННАЯ ТЕРРИТОРИЯ</p><h2 id="place-name"></h2><p id="place-meta"></p></div>
       </section>
@@ -33,6 +38,8 @@
           </div>
         </div>
       </section>
+      </section>
+      <section id="table-panel" class="tab-panel table-panel" role="tabpanel" aria-labelledby="table-tab" hidden>
       <div class="table-toolbar" aria-label="Управление таблицей">
         <div class="table-info"><span id="page-summary">Нет данных</span><span class="resize-hint">Размер: потяните правый нижний угол</span></div>
         <div class="page-controls">
@@ -65,6 +72,7 @@
           <div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div>
           <div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div>
         </div>
+      </section>
       </section>
       <footer><span id="attribution"></span><span id="build-info">Версия загружается…</span></footer>
     </main>

@@ -457,7 +457,17 @@ export function createStationMap({ container, message, count }) {
     if (viewportStations.length) renderMarkers();
   }
 
-  function showStations(stations, { fit = false, protectUserLocation = false } = {}) {
+  function focusStations(stations) {
+    map.invalidateSize();
+    const valid = stations.filter(hasMapCoordinates);
+    if (!valid.length) return false;
+    const bounds = L.latLngBounds(valid.map((station) => [Number(station.lat), Number(station.lon)]));
+    if (!bounds.isValid()) return false;
+    map.fitBounds(bounds, { padding: [34, 34], maxZoom: 13 });
+    return true;
+  }
+
+  function showStations(stations, { fit = false, protectUserLocation = false, focus = stations } = {}) {
     if (protectUserLocation && userLocated) {
       scheduleViewportLoad({ immediate: true });
       return;
@@ -467,14 +477,16 @@ export function createStationMap({ container, message, count }) {
     mergeStations(stations);
     renderMarkers();
     map.invalidateSize();
-    const valid = stations.filter(hasMapCoordinates);
-    if (fit && valid.length) {
-      const temporaryBounds = L.latLngBounds(valid.map((station) => [Number(station.lat), Number(station.lon)]));
-      if (temporaryBounds.isValid()) map.fitBounds(temporaryBounds, { padding: [34, 34], maxZoom: 13 });
+    if (fit && focusStations(focus)) {
+      // The moveend event schedules loading for the newly focused viewport.
     } else {
       scheduleViewportLoad({ immediate: true });
     }
   }
 
-  return { showStations, setFilters, locateUser, clear };
+  function resize() {
+    map.invalidateSize();
+  }
+
+  return { showStations, focusStations, setFilters, locateUser, clear, resize };
 }

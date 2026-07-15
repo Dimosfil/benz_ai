@@ -17,7 +17,14 @@ test("map accepts valid station coordinates and rejects invalid values", () => {
 });
 
 test("map marker status follows the selected fuel aggregation", () => {
-  const station = { overallStatus: "available", fuelStatus: { 92: "not_available", 95: "available" } };
+  const station = {
+    overallStatus: "available",
+    fuelStatus: { 92: "not_available", 95: "available" },
+    availabilityBySource: {
+      alfa: { overallStatus: "available", fuelStatus: { 92: "not_available", 95: "available" } },
+      sber: { overallStatus: "available", fuelStatus: { 92: "not_available", 95: "available" } },
+    },
+  };
   assert.equal(stationMapStatus(station, []), "available");
   assert.equal(stationMapStatus(station, ["92"]), "not_available");
   assert.equal(stationMapStatus(station, ["92", "95"]), "maybe_available");

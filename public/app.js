@@ -43,6 +43,10 @@ const findButton = document.querySelector("#find");
 const refreshButton = document.querySelector("#refresh-cache");
 const buildInfoNode = document.querySelector("#build-info");
 const mapSection = document.querySelector("#map-section");
+const mapTab = document.querySelector("#map-tab");
+const tableTab = document.querySelector("#table-tab");
+const mapPanel = document.querySelector("#map-panel");
+const tablePanel = document.querySelector("#table-panel");
 const stationMap = createStationMap({
   container: document.querySelector("#station-map"),
   message: document.querySelector("#map-message"),
@@ -58,6 +62,8 @@ let pendingTableScroll = null;
 let saveTimer = null;
 let lastTableSize = null;
 let draggedColumn = null;
+let activeTab = "map";
+let pendingMapFocus = null;
 
 const UI_STATE_KEY = "benz-ai.ui.v1";
 const sortKeys = new Set(COLUMN_KEYS);
@@ -84,6 +90,7 @@ function saveUIState() {
       columnOrder,
       fuelOpen: fuel.open,
       statusOpen: status.open,
+      activeTab,
       table: {
         ...lastTableSize,
         scrollLeft: Math.round(tableWrap.scrollLeft),
@@ -122,6 +129,7 @@ function restoreUIState() {
   columnOrder = normalizeColumnOrder(saved.columnOrder);
   fuel.open = Boolean(saved.fuelOpen);
   status.open = Boolean(saved.statusOpen);
+  activeTab = saved.activeTab === "table" ? "table" : "map";
   if (saved.table && typeof saved.table === "object") {
     lastTableSize = {
       width: Number(saved.table.width) || null,
@@ -135,6 +143,26 @@ function restoreUIState() {
       top: Math.max(0, Number(saved.table.scrollTop) || 0),
     };
   }
+}
+
+function setActiveTab(tabName, { focusTab = false } = {}) {
+  activeTab = tabName === "table" ? "table" : "map";
+  const mapActive = activeTab === "map";
+  mapPanel.hidden = !mapActive;
+  tablePanel.hidden = mapActive;
+  mapTab.setAttribute("aria-selected", String(mapActive));
+  tableTab.setAttribute("aria-selected", String(!mapActive));
+  mapTab.tabIndex = mapActive ? 0 : -1;
+  tableTab.tabIndex = mapActive ? -1 : 0;
+  if (focusTab) (mapActive ? mapTab : tableTab).focus();
+  if (mapActive) requestAnimationFrame(() => {
+    stationMap.resize();
+    if (pendingMapFocus) {
+      stationMap.focusStations(pendingMapFocus);
+      pendingMapFocus = null;
+    }
+  });
+  scheduleSaveUIState();
 }
 
 function applyColumnOrder() {
@@ -353,7 +381,15 @@ function renderStations() {
   }
 }
 
-async function loadSummary({ refresh = false } = {}) {
+function filteredStations() {
+  return filterStations(allStations, {
+    fuels: selectedFuels(),
+    statuses: selectedStatuses(),
+    text: query.value,
+  });
+}
+
+async function loadSummary({ refresh = false, activateMap = false } = {}) {
   const protectUserLocation = initialSummaryLoad;
   initialSummaryLoad = false;
   findButton.disabled = true;
@@ -364,10 +400,18 @@ async function loadSummary({ refresh = false } = {}) {
     const path = refresh ? "/api/cache/refresh" : "/api/summary";
     const data = await fetchJson(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
     allStations = data.stations;
+    if (activateMap) setActiveTab("map");
     mapSection.hidden = false;
     renderSummary(data);
     renderStations();
-    stationMap.showStations(allStations, { fit: true, protectUserLocation });
+    const matches = filteredStations();
+    const mapFocus = matches.length ? matches : allStations;
+    if (mapPanel.hidden) pendingMapFocus = mapFocus;
+    stationMap.showStations(allStations, {
+      fit: !mapPanel.hidden,
+      protectUserLocation,
+      focus: mapFocus,
+    });
     const messages = [...(data.warnings || [])];
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
     notice.hidden = !messages.length;
@@ -392,10 +436,18 @@ async function search(event) {
   event?.preventDefault();
   currentPage = 1;
   scheduleSaveUIState();
-  await loadSummary();
+  await loadSummary({ activateMap: true });
 }
 
 document.querySelector("#search-form").addEventListener("submit", search);
+mapTab.addEventListener("click", () => setActiveTab("map"));
+tableTab.addEventListener("click", () => setActiveTab("table"));
+[mapTab, tableTab].forEach((tab) => tab.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === "ArrowLeft" || event.key === "Home" ? "map" : "table";
+  setActiveTab(next, { focusTab: true });
+}));
 refreshButton.addEventListener("click", () => loadSummary({ refresh: true }));
 fuel.addEventListener("change", (event) => { updateFuelPicker(event.target); currentPage = 1; renderStations(); });
 status.addEventListener("change", (event) => { updateStatusPicker(event.target); currentPage = 1; renderStations(); });
@@ -450,6 +502,7 @@ fuel.addEventListener("toggle", scheduleSaveUIState);
 status.addEventListener("toggle", scheduleSaveUIState);
 window.addEventListener("pagehide", saveUIState);
 restoreUIState();
+setActiveTab(activeTab);
 applyColumnOrder();
 updateFuelPicker();
 updateStatusPicker();

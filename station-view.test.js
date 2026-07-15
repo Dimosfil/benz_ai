@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { stationConfidence, stationFuelEntries } from "./public/station-view.js";
+import {
+  selectionStatus,
+  stationConfidence,
+  stationFreshText,
+  stationFuelEntries,
+  stationLastPaymentAt,
+} from "./public/station-view.js";
 
 test("station fuel entries combine availability and prices", () => {
   const entries = stationFuelEntries({
@@ -9,7 +15,7 @@ test("station fuel entries combine availability and prices", () => {
   });
 
   assert.deepEqual(entries.map(({ type, status, price }) => ({ type, status, price })), [
-    { type: "92", status: "available", price: 64 },
+    { type: "92", status: "maybe_available", price: 64 },
     { type: "95", status: "no_data", price: 68.5 },
     { type: "DT", status: "not_available", price: null },
   ]);
@@ -47,4 +53,51 @@ test("station confidence reflects disagreement between sources", () => {
       gdebenz: { overallStatus: "not_available", fuelStatus: { 95: "not_available" } },
     },
   }), { matching: 1, total: 2, percent: 50 });
+});
+
+test("uses green only for strongly confirmed availability", () => {
+  const oneSignal = {
+    overallStatus: "available",
+    fuelStatus: { 92: "available" },
+    availabilityBySource: {
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" } },
+    },
+  };
+  const twoSignals = {
+    ...oneSignal,
+    availabilityBySource: {
+      ...oneSignal.availabilityBySource,
+      sber: { overallStatus: "available", fuelStatus: { 92: "available" } },
+    },
+  };
+
+  assert.equal(selectionStatus(oneSignal), "maybe_available");
+  assert.equal(selectionStatus(oneSignal, ["92"]), "maybe_available");
+  assert.equal(selectionStatus(twoSignals), "available");
+  assert.equal(selectionStatus(twoSignals, ["92"]), "available");
+});
+
+test("keeps a 50 percent signal yellow", () => {
+  assert.equal(selectionStatus({
+    overallStatus: "maybe_available",
+    fuelStatus: { 95: "maybe_available" },
+    availabilityBySource: {
+      tbank: { overallStatus: "available", fuelStatus: { 95: "available" } },
+      gdebenz: { overallStatus: "not_available", fuelStatus: { 95: "not_available" } },
+    },
+  }), "maybe_available");
+});
+
+test("shows the latest bank payment without treating a crowd report as payment", () => {
+  const station = {
+    availabilityBySource: {
+      alfa: { observedAt: "2026-07-15T10:00:00.000Z" },
+      sber: { observedAt: "2026-07-15T11:30:00.000Z" },
+      gdebenz: { observedAt: "2026-07-15T12:00:00.000Z" },
+    },
+    priceUpdatedAt: null,
+  };
+
+  assert.equal(stationLastPaymentAt(station), "2026-07-15T11:30:00.000Z");
+  assert.match(stationFreshText(station), /^Последняя оплата: /);
 });

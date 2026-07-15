@@ -26,6 +26,12 @@ button.secondary{background:#e3ece5;color:#205f37;border:1px solid #b9cbbb}
 button.secondary:hover{background:#d7e6da}
 button:disabled{opacity:.6;cursor:wait}
 .notice{margin:18px 0;padding:12px;border-left:4px solid #d6931e;background:#fff7e7;color:#6d5011}
+.view-tabs{display:flex;width:max-content;gap:4px;margin:22px 0 12px;padding:4px;border:1px solid #d5dfd7;border-radius:12px;background:#e8eee9}
+.view-tab{min-width:112px;align-self:auto;padding:10px 18px;border:0;border-radius:9px;background:transparent;color:#536057}
+.view-tab:hover{background:#f6f9f6;color:#205f37}
+.view-tab[aria-selected="true"]{background:#fff;color:#176635;box-shadow:0 3px 10px #18302018}
+.view-tab:focus-visible{outline:3px solid #73ad85;outline-offset:2px}
+.tab-panel[hidden]{display:none!important}
 .place{margin:34px 0 15px}
 .place h2{margin:.3rem 0;font-size:1.6rem}
 .place p:last-child{margin:0;color:#66736b}
@@ -111,6 +117,8 @@ button:disabled{opacity:.6;cursor:wait}
 .map-count{padding:7px 11px;border-radius:999px;background:#fff;color:#205f37;font-size:.82rem;font-weight:800;white-space:nowrap}
 .map-shell{position:relative;overflow:hidden;background:#dce8df;border:1px solid #d4dfd6;border-radius:18px;box-shadow:0 10px 30px #18302012}
 .station-map{width:100%;height:clamp(420px,68vh,680px);z-index:0}
+.map-panel .map-section{width:calc(100vw - 32px);margin-left:50%;transform:translateX(-50%)}
+.map-panel .station-map{height:calc(100dvh - 120px);min-height:520px;max-height:none}
 .map-message{position:absolute;z-index:500;top:50%;left:50%;width:min(340px,calc(100% - 32px));margin:0;padding:14px 18px;transform:translate(-50%,-50%);border-radius:12px;background:#fff;color:#536057;text-align:center;box-shadow:0 10px 30px #18302025}
 .map-legend{position:absolute;z-index:500;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:7px 11px;max-width:calc(100% - 24px);padding:8px 10px;border-radius:10px;background:#fffffff0;color:#435048;font-size:.72rem;box-shadow:0 4px 16px #1830201c;backdrop-filter:blur(5px)}
 .map-legend span{display:flex;align-items:center;gap:5px;white-space:nowrap}
@@ -175,4 +183,4 @@ button:disabled{opacity:.6;cursor:wait}
 .map-popup-secondary-link{color:#1768d4}
 footer{color:#7a857e;font-size:.75rem;margin:28px 0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px}
 #build-info{font-variant-numeric:tabular-nums;white-space:nowrap}
-@media(max-width:720px){main{padding:32px 14px}.controls{grid-template-columns:1fr 1fr}.location,.search{grid-column:span 2}.summary-cards{grid-template-columns:1fr 1fr}.breakdown,.legend-items{grid-template-columns:1fr}.station-map{height:68vh;min-height:480px}.map-legend{right:10px;left:10px;bottom:10px}.station-popup .leaflet-popup-content-wrapper,.station-popup .leaflet-popup-content{width:min(380px,calc(100vw - 28px))!important}.map-popup-status{margin:10px}.map-popup-section{padding-inline:10px}.table-toolbar{align-items:flex-start;flex-direction:column}.resize-hint,.reset-size{display:none}.page-controls{width:100%;justify-content:space-between}.page-controls label{font-size:0}.page-controls label::before{content:"Строк";font-size:.84rem}.table-wrap{display:none}.results{display:grid}.station{flex-direction:column}.right{text-align:left}}
+@media(max-width:720px){main{padding:32px 14px}.controls{grid-template-columns:1fr 1fr}.location,.search{grid-column:span 2}.view-tabs{width:100%}.view-tab{flex:1}.summary-cards{grid-template-columns:1fr 1fr}.breakdown,.legend-items{grid-template-columns:1fr}.map-panel .map-section{width:calc(100vw - 20px)}.map-panel .station-map{height:calc(100dvh - 92px);min-height:480px}.map-legend{right:10px;left:10px;bottom:10px}.station-popup .leaflet-popup-content-wrapper,.station-popup .leaflet-popup-content{width:min(380px,calc(100vw - 28px))!important}.map-popup-status{margin:10px}.map-popup-section{padding-inline:10px}.table-toolbar{align-items:flex-start;flex-direction:column}.resize-hint,.reset-size{display:none}.page-controls{width:100%;justify-content:space-between}.page-controls label{font-size:0}.page-controls label::before{content:"Строк";font-size:.84rem}.table-wrap{display:none}.results{display:grid}.station{flex-direction:column}.right{text-align:left}}
