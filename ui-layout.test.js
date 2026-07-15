@@ -14,13 +14,26 @@ test("separates map and table results into accessible tabs", async () => {
   assert.match(html, /id="table-panel"[^>]+role="tabpanel"[^>]+hidden/);
 });
 
-test("uses a viewport-sized map and activates it for an explicit search", async () => {
+test("uses a fixed viewport shell with a right filter sidebar", async () => {
+  const [html, css] = await Promise.all([
+    readFile(projectFile("./public/index.html"), "utf8"),
+    readFile(projectFile("./public/styles.css"), "utf8"),
+  ]);
+
+  assert.match(html, /<header class="app-header">[\s\S]+id="overview"[\s\S]+role="tablist"/);
+  assert.match(html, /class="workspace">[\s\S]+class="view-stage">[\s\S]+class="search-sidebar"/);
+  assert.match(css, /html,body\{width:100%;height:100%;overflow:hidden\}/);
+  assert.match(css, /\.workspace\{[^}]+grid-template-columns:minmax\(0,1fr\) clamp\(340px,23vw,420px\)/);
+  assert.match(css, /\.station-map\{width:100%;height:100%;min-height:0/);
+});
+
+test("activates and focuses the map for an explicit search", async () => {
   const [css, app] = await Promise.all([
     readFile(projectFile("./public/styles.css"), "utf8"),
     readFile(projectFile("./public/app.js"), "utf8"),
   ]);
 
-  assert.match(css, /\.map-panel \.station-map\{height:calc\(100dvh - 120px\)/);
+  assert.match(css, /\.map-section\{display:grid;height:100%;min-height:0/);
   assert.match(app, /loadSummary\(\{ activateMap: true \}\)/);
   assert.match(app, /const mapFocus = matches\.length \? matches : allStations/);
   assert.match(app, /focus: mapFocus/);

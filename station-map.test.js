@@ -64,3 +64,12 @@ test("map requests the whole padded viewport after a distant jump", () => {
   const desired = { south: 60, north: 62, west: 70, east: 72 };
   assert.deepEqual(uncoveredViewportBounds({ south: 49, north: 53, west: 36, east: 44 }, desired), [desired]);
 });
+
+test("uses a text-only Leaflet attribution prefix", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+
+  assert.match(source, /attributionControl\.setPrefix\('<a href="https:\/\/leafletjs\.com"[^>]*>Leaflet<\/a>'\)/);
+});

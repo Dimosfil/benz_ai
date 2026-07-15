@@ -244,6 +244,7 @@ export function createStationMap({ container, message, count }) {
   }
 
   const map = L.map(container, { zoomControl: true, preferCanvas: true });
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noreferrer">Leaflet</a>');
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap contributors",
