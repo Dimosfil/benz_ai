@@ -28,12 +28,16 @@ test("uses a fixed viewport shell with a right filter sidebar", async () => {
 });
 
 test("activates and focuses the map for an explicit search", async () => {
-  const [css, app] = await Promise.all([
+  const [html, css, app] = await Promise.all([
+    readFile(projectFile("./public/index.html"), "utf8"),
     readFile(projectFile("./public/styles.css"), "utf8"),
     readFile(projectFile("./public/app.js"), "utf8"),
   ]);
 
-  assert.match(css, /\.map-section\{display:grid;height:100%;min-height:0/);
+  assert.doesNotMatch(html, /class="map-heading"/);
+  assert.match(html, /class="map-shell">\s*<span id="map-count"/);
+  assert.match(css, /\.map-section\{display:grid;height:100%;min-height:0;grid-template-rows:minmax\(0,1fr\)/);
+  assert.match(css, /\.map-count\{position:absolute;[^}]+top:12px;right:12px/);
   assert.match(app, /loadSummary\(\{ activateMap: true \}\)/);
   assert.match(app, /const mapFocus = matches\.length \? matches : allStations/);
   assert.match(app, /focus: mapFocus/);
