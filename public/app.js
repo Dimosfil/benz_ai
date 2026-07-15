@@ -49,7 +49,7 @@ const stationMap = createStationMap({
   count: document.querySelector("#map-count"),
 });
 let allStations = [];
-let mapNeedsFit = false;
+let initialSummaryLoad = true;
 let currentPage = 1;
 let pageSize = Number(pageSizeSelect.value);
 let sortKey = "name";
@@ -281,8 +281,7 @@ function renderStations() {
   const selectedStatus = selectedStatuses();
   const filtered = filterStations(allStations, { fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const sorted = sortStations(filtered, selectedFuel);
-  stationMap.render(sorted, selectedFuel, { fit: mapNeedsFit });
-  mapNeedsFit = false;
+  stationMap.setFilters({ fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
   const firstIndex = (currentPage - 1) * pageSize;
@@ -355,6 +354,8 @@ function renderStations() {
 }
 
 async function loadSummary({ refresh = false } = {}) {
+  const protectUserLocation = initialSummaryLoad;
+  initialSummaryLoad = false;
   findButton.disabled = true;
   refreshButton.disabled = true;
   meta.textContent = refresh ? "Очищаем кэш и заново опрашиваем источники…" : "Определяем территорию и собираем АЗС…";
@@ -364,17 +365,15 @@ async function loadSummary({ refresh = false } = {}) {
     const data = await fetchJson(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
     allStations = data.stations;
     mapSection.hidden = false;
-    mapNeedsFit = true;
     renderSummary(data);
     renderStations();
+    stationMap.showStations(allStations, { fit: true, protectUserLocation });
     const messages = [...(data.warnings || [])];
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
     notice.hidden = !messages.length;
     notice.textContent = messages.join(" ");
   } catch (error) {
     allStations = [];
-    stationMap.clear();
-    mapSection.hidden = true;
     overview.hidden = true;
     summaryDetails.hidden = true;
     statusLegend.hidden = true;
@@ -456,4 +455,6 @@ updateFuelPicker();
 updateStatusPicker();
 new ResizeObserver(scheduleSaveUIState).observe(tableWrap);
 fetchJson("/api/health").then((data) => renderBuildInfo(data.build)).catch(() => renderBuildInfo(null));
+mapSection.hidden = false;
+stationMap.locateUser();
 loadSummary();

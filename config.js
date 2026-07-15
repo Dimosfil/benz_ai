@@ -17,6 +17,8 @@ export const config = Object.freeze({
   host: process.env.HOST || "0.0.0.0",
   port: positiveInteger(process.env.PORT, 3000),
   resultCacheTtlMs: 2 * 60_000,
+  resultCacheMaxEntries: positiveInteger(process.env.RESULT_CACHE_MAX_ENTRIES, 32),
+  providerAreaCacheMaxEntries: positiveInteger(process.env.PROVIDER_AREA_CACHE_MAX_ENTRIES, 64),
   sourceUserAgent: process.env.SOURCE_USER_AGENT || "BenzAI/0.1 local fuel aggregator",
   geocoder: Object.freeze({
     url: process.env.GEOCODER_API_URL || "https://nominatim.openstreetmap.org/search",
@@ -54,6 +56,7 @@ export const config = Object.freeze({
     enabled: enabledByDefault(process.env.ENABLE_YANDEX_PRICES),
     limit: Number.isFinite(yandexLimit) && yandexLimit > 0 ? Math.floor(yandexLimit) : Infinity,
     cacheTtlMs: 15 * 60_000,
+    cacheMaxEntries: positiveInteger(process.env.YANDEX_CACHE_MAX_ENTRIES, 1000),
     timeoutMs: 15_000,
     concurrency: 3,
   }),

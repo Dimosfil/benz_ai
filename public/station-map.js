@@ -6,8 +6,12 @@ import {
   stationPriceText,
   stationSources,
 } from "./station-view.js";
+import { filterStations } from "./station-filter.js";
+import { fetchJson } from "./api-client.js";
 
 const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", "no_data"]);
+const MIN_VIEWPORT_ZOOM = 8;
+const VIEWPORT_DEBOUNCE_MS = 400;
 
 export function hasMapCoordinates(station) {
   if (station?.lat == null || station?.lon == null) return false;
@@ -22,6 +26,16 @@ export function hasMapCoordinates(station) {
 export function stationMapStatus(station, selectedFuels = []) {
   const status = selectionStatus(station, selectedFuels);
   return STATUS_COLORS.has(status) ? status : "no_data";
+}
+
+export function stationViewportUrl({ south, north, west, east }) {
+  const params = new URLSearchParams({
+    minLat: Number(south).toFixed(6),
+    maxLat: Number(north).toFixed(6),
+    minLon: Number(west).toFixed(6),
+    maxLon: Number(east).toFixed(6),
+  });
+  return `/api/stations?${params}`;
 }
 
 function text(tag, value, className) {
@@ -90,7 +104,7 @@ export function createStationMap({ container, message, count }) {
   if (!L?.map || !L?.markerClusterGroup) {
     message.hidden = false;
     message.textContent = "Карта не загрузилась. Список АЗС доступен ниже.";
-    return { render() {}, clear() {} };
+    return { showStations() {}, setFilters() {}, locateUser() {}, clear() {} };
   }
 
   const map = L.map(container, { zoomControl: true, preferCanvas: true });
@@ -106,33 +120,168 @@ export function createStationMap({ container, message, count }) {
   });
   map.addLayer(markers);
   map.setView([55.75, 37.62], 5);
+  let viewportStations = [];
+  let filters = { fuels: [], statuses: [], text: "" };
+  let loadTimer = null;
+  let activeRequest = null;
+  let requestSequence = 0;
+  let userLocated = false;
+  let locatePending = null;
+  let userLayer = null;
 
-  function clear() {
-    markers.clearLayers();
-    count.textContent = "0 АЗС";
+  function showMessage(value) {
+    message.textContent = value || "";
+    message.hidden = !value;
   }
 
-  function render(stations, selectedFuels, { fit = false } = {}) {
+  function renderMarkers() {
     markers.clearLayers();
-    const valid = stations.filter(hasMapCoordinates);
+    const filtered = filterStations(viewportStations, filters);
+    const valid = filtered.filter(hasMapCoordinates);
     const layers = valid.map((station) => {
-      const status = stationMapStatus(station, selectedFuels);
+      const status = stationMapStatus(station, filters.fuels);
       return L.marker([Number(station.lat), Number(station.lon)], {
         icon: markerIcon(L, status),
         title: station.name || "АЗС",
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
-      }).bindPopup(() => popupFor(station, selectedFuels), { maxWidth: 340, minWidth: 250 });
+      }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 340, minWidth: 250 });
     });
     markers.addLayers(layers);
     count.textContent = `${valid.length.toLocaleString("ru-RU")} АЗС`;
-    message.hidden = valid.length > 0;
-    message.textContent = valid.length ? "" : "По выбранным фильтрам на карте нет АЗС.";
-    if (fit && valid.length) {
-      const bounds = markers.getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [34, 34], maxZoom: 13 });
-    }
+    showMessage(valid.length || !viewportStations.length ? "" : "По выбранным фильтрам на карте нет АЗС.");
     requestAnimationFrame(() => map.invalidateSize());
   }
 
-  return { render, clear };
+  function cancelViewportLoad() {
+    clearTimeout(loadTimer);
+    loadTimer = null;
+    activeRequest?.abort();
+    activeRequest = null;
+  }
+
+  async function loadViewport() {
+    loadTimer = null;
+    if (map.getZoom() < MIN_VIEWPORT_ZOOM) {
+      activeRequest?.abort();
+      activeRequest = null;
+      viewportStations = [];
+      markers.clearLayers();
+      count.textContent = "0 АЗС";
+      showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
+      return;
+    }
+
+    activeRequest?.abort();
+    const request = new AbortController();
+    activeRequest = request;
+    const sequence = ++requestSequence;
+    viewportStations = [];
+    markers.clearLayers();
+    count.textContent = "…";
+    showMessage("Загружаем АЗС в видимой области…");
+    const bounds = map.getBounds();
+    try {
+      const data = await fetchJson(stationViewportUrl({
+        south: bounds.getSouth(),
+        north: bounds.getNorth(),
+        west: bounds.getWest(),
+        east: bounds.getEast(),
+      }), { signal: request.signal });
+      if (request.signal.aborted || sequence !== requestSequence) return;
+      viewportStations = Array.isArray(data.stations) ? data.stations : [];
+      renderMarkers();
+      if (!viewportStations.length) showMessage("В видимой области АЗС не найдены.");
+    } catch (error) {
+      if (request.signal.aborted || sequence !== requestSequence) return;
+      viewportStations = [];
+      markers.clearLayers();
+      count.textContent = "0 АЗС";
+      showMessage(error instanceof Error ? error.message : "Не удалось загрузить АЗС для этой области.");
+    } finally {
+      if (activeRequest === request) activeRequest = null;
+    }
+  }
+
+  function scheduleViewportLoad({ immediate = false } = {}) {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(loadViewport, immediate ? 0 : VIEWPORT_DEBOUNCE_MS);
+  }
+
+  function locateUser(showError = false) {
+    if (!navigator.geolocation) {
+      if (showError) showMessage("Браузер не поддерживает определение местоположения.");
+      return Promise.resolve(false);
+    }
+    if (locatePending) return locatePending;
+    locatePending = new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition((position) => {
+        userLocated = true;
+        const latlng = [position.coords.latitude, position.coords.longitude];
+        map.invalidateSize();
+        if (userLayer) userLayer.setLatLng(latlng);
+        else userLayer = L.circleMarker(latlng, {
+          radius: 7,
+          weight: 3,
+          color: "#fff",
+          fillColor: "#1768d4",
+          fillOpacity: 1,
+        }).bindTooltip("Ваше местоположение").addTo(map);
+        map.setView(latlng, Math.max(map.getZoom(), 13));
+        resolve(true);
+      }, () => {
+        if (showError) showMessage("Не удалось определить местоположение. Проверьте разрешение браузера.");
+        resolve(false);
+      }, { enableHighAccuracy: false, timeout: 8_000, maximumAge: 5 * 60_000 });
+    }).finally(() => { locatePending = null; });
+    return locatePending;
+  }
+
+  const LocateControl = L.Control.extend({
+    options: { position: "topright" },
+    onAdd() {
+      const button = L.DomUtil.create("button", "map-locate-button");
+      button.type = "button";
+      button.title = "Показать моё местоположение";
+      button.setAttribute("aria-label", button.title);
+      button.textContent = "⌖";
+      L.DomEvent.disableClickPropagation(button);
+      L.DomEvent.on(button, "click", () => locateUser(true));
+      return button;
+    },
+  });
+  map.addControl(new LocateControl());
+  map.on("moveend", () => scheduleViewportLoad());
+
+  function clear() {
+    cancelViewportLoad();
+    requestSequence += 1;
+    viewportStations = [];
+    markers.clearLayers();
+    count.textContent = "0 АЗС";
+    showMessage("");
+  }
+
+  function setFilters(nextFilters) {
+    filters = nextFilters;
+    if (viewportStations.length) renderMarkers();
+  }
+
+  function showStations(stations, { fit = false, protectUserLocation = false } = {}) {
+    if (protectUserLocation && userLocated) {
+      scheduleViewportLoad({ immediate: true });
+      return;
+    }
+    viewportStations = stations;
+    renderMarkers();
+    map.invalidateSize();
+    const valid = stations.filter(hasMapCoordinates);
+    if (fit && valid.length) {
+      const temporaryBounds = L.latLngBounds(valid.map((station) => [Number(station.lat), Number(station.lon)]));
+      if (temporaryBounds.isValid()) map.fitBounds(temporaryBounds, { padding: [34, 34], maxZoom: 13 });
+    } else {
+      scheduleViewportLoad({ immediate: true });
+    }
+  }
+
+  return { showStations, setFilters, locateUser, clear };
 }

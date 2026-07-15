@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { inBbox } from "../domain/stations.js";
 
 const cache = new Map();
@@ -74,8 +75,8 @@ function centerAndRadius(bbox) {
 export async function fetchGdebenz(bbox) {
   const { lat, lon, radiusKm } = centerAndRadius(bbox);
   const key = `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}`;
-  const saved = cache.get(key);
-  if (saved && Date.now() - saved.createdAt < config.gdebenz.cacheTtlMs) return { ...saved.value, cached: true };
+  const saved = readFreshCache(cache, key, config.gdebenz.cacheTtlMs);
+  if (saved) return { ...saved, cached: true };
   const url = new URL(config.gdebenz.url);
   url.search = new URLSearchParams({ lat: String(lat), lon: String(lon), radius_km: String(radiusKm) });
   const response = await fetch(url, {
@@ -95,6 +96,6 @@ export async function fetchGdebenz(bbox) {
     returned: normalized.length,
     droppedOutside: normalized.length - stations.length,
   };
-  cache.set(key, { createdAt: Date.now(), value });
+  writeBoundedCache(cache, key, value, config.providerAreaCacheMaxEntries);
   return { ...value, cached: false };
 }

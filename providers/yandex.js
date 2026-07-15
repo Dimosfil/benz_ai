@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { normalizeFuelName } from "../domain/stations.js";
 
 const cache = new Map();
@@ -34,8 +35,8 @@ export function isYandexVerificationCandidate(station) {
 }
 
 async function checkStation(station) {
-  const saved = cache.get(station.yandexOrgId);
-  if (saved && Date.now() - saved.createdAt < config.yandex.cacheTtlMs) return { ...station, ...saved.value };
+  const saved = readFreshCache(cache, station.yandexOrgId, config.yandex.cacheTtlMs);
+  if (saved) return { ...station, ...saved };
   const response = await fetch(`https://yandex.ru/maps/org/${station.yandexOrgId}/`, {
     signal: AbortSignal.timeout(config.yandex.timeoutMs),
     headers: { "User-Agent": "Mozilla/5.0 BenzAI/0.1", "Accept-Language": "ru-RU,ru;q=0.9" },
@@ -49,7 +50,7 @@ async function checkStation(station) {
     sourceRefs: [...new Map(refs.map((ref) => [`${ref.source}:${ref.externalId}`, ref])).values()],
     yandexCheckedAt: new Date().toISOString(),
   };
-  cache.set(station.yandexOrgId, { createdAt: Date.now(), value });
+  writeBoundedCache(cache, station.yandexOrgId, value, config.yandex.cacheMaxEntries);
   return { ...station, ...value };
 }
 

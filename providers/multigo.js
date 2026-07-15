@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { inBbox } from "../domain/stations.js";
 
 const cache = new Map();
@@ -70,8 +71,8 @@ export function normalizeMultigoStation(station) {
 export async function fetchMultigo(bbox) {
   const { lat, lon } = centerOf(bbox);
   const key = [bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon].map((value) => value.toFixed(4)).join(",");
-  const saved = cache.get(key);
-  if (saved && Date.now() - saved.createdAt < config.multigo.cacheTtlMs) return { ...saved.value, cached: true };
+  const saved = readFreshCache(cache, key, config.multigo.cacheTtlMs);
+  if (saved) return { ...saved, cached: true };
 
   const response = await fetch(config.multigo.url, {
     method: "POST",
@@ -92,6 +93,6 @@ export async function fetchMultigo(bbox) {
     available: true,
     limit: config.multigo.limit,
   };
-  cache.set(key, { createdAt: Date.now(), value });
+  writeBoundedCache(cache, key, value, config.providerAreaCacheMaxEntries);
   return { ...value, cached: false };
 }

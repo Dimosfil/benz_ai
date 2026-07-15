@@ -4,6 +4,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { buildInfo } from "./build-info.js";
+import { readFreshCache, writeBoundedCache } from "./domain/bounded-cache.js";
 import { inGeoBoundary, mergeStations, summarizeStations } from "./domain/stations.js";
 import { clearAlfaCache, fetchAlfa } from "./providers/alfa.js";
 import { fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
@@ -39,6 +40,9 @@ function readBbox(params) {
   const keys = ["minLat", "maxLat", "minLon", "maxLon"];
   const bbox = Object.fromEntries(keys.map((key) => [key, asNumber(params.get(key), key)]));
   if (bbox.minLat >= bbox.maxLat || bbox.minLon >= bbox.maxLon) throw new Error("Некорректные границы карты");
+  if (bbox.maxLat - bbox.minLat > 12 || bbox.maxLon - bbox.minLon > 12) {
+    throw new Error("Слишком большая область карты. Приблизьте карту для загрузки АЗС");
+  }
   return bbox;
 }
 
@@ -58,8 +62,8 @@ export function providerFailureMessage(result, source) {
 
 async function searchStations(bbox) {
   const key = JSON.stringify(bbox);
-  const saved = resultCache.get(key);
-  if (saved && Date.now() - saved.createdAt < config.resultCacheTtlMs) return { ...saved.value, cached: true };
+  const saved = readFreshCache(resultCache, key, config.resultCacheTtlMs);
+  if (saved) return { ...saved, cached: true };
 
   const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled([
     fetchTbank(bbox),
@@ -184,7 +188,7 @@ async function searchStations(bbox) {
       },
     },
   };
-  resultCache.set(key, { createdAt: Date.now(), value });
+  writeBoundedCache(resultCache, key, value, config.resultCacheMaxEntries);
   return { ...value, cached: false };
 }
 
