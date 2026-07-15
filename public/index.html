@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru">
-  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Benz AI — поиск топлива</title><link rel="stylesheet" href="/styles.css"></head>
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Benz AI — поиск топлива</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"><link rel="stylesheet" href="/styles.css"></head>
   <body>
     <main>
       <header><p class="eyebrow">BENZ AI</p><h1>Где есть бензин</h1><p class="subtitle">Агрегатор доступности топлива на АЗС</p></header>
@@ -17,6 +17,22 @@
         <div class="place"><p class="eyebrow">НАЙДЕННАЯ ТЕРРИТОРИЯ</p><h2 id="place-name"></h2><p id="place-meta"></p></div>
       </section>
       <section class="summary"><strong id="count">—</strong><span id="meta">Введите город или область</span></section>
+      <section id="map-section" class="map-section" hidden aria-labelledby="map-title">
+        <div class="map-heading">
+          <div><p class="eyebrow">КАРТА АЗС</p><h2 id="map-title">Все станции на карте</h2></div>
+          <span id="map-count" class="map-count">0 АЗС</span>
+        </div>
+        <div class="map-shell">
+          <div id="station-map" class="station-map" role="application" aria-label="Интерактивная карта автозаправочных станций"></div>
+          <p id="map-message" class="map-message" hidden></p>
+          <div class="map-legend" aria-label="Обозначения статусов на карте">
+            <span><i class="available"></i> Вероятно есть</span>
+            <span><i class="maybe_available"></i> Возможно есть</span>
+            <span><i class="not_available"></i> Вероятно нет</span>
+            <span><i class="no_data"></i> Нет данных</span>
+          </div>
+        </div>
+      </section>
       <div class="table-toolbar" aria-label="Управление таблицей">
         <div class="table-info"><span id="page-summary">Нет данных</span><span class="resize-hint">Размер: потяните правый нижний угол</span></div>
         <div class="page-controls">
@@ -53,6 +69,8 @@
       <footer><span id="attribution"></span><span id="build-info">Версия загружается…</span></footer>
     </main>
     <template id="station"><article class="station"><div><p class="source"></p><h2></h2><p class="address"></p><p class="detail"></p><a class="station-link" target="_blank" rel="noreferrer" hidden>Открыть карту</a></div><div class="right"><span class="badge"></span><p class="fuel"></p><p class="prices"></p><p class="fresh"></p></div></article></template>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

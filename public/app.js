@@ -12,6 +12,7 @@ import {
 import { COLUMN_KEYS, moveColumnOrder, normalizeColumnOrder } from "./table-order.js";
 import { filterStations, normalizeSelectedFuels } from "./station-filter.js";
 import { fetchJson } from "./api-client.js";
+import { createStationMap } from "./station-map.js";
 
 const locationInput = document.querySelector("#location");
 const fuel = document.querySelector("#fuel");
@@ -41,7 +42,14 @@ const statusLegend = document.querySelector("#status-legend");
 const findButton = document.querySelector("#find");
 const refreshButton = document.querySelector("#refresh-cache");
 const buildInfoNode = document.querySelector("#build-info");
+const mapSection = document.querySelector("#map-section");
+const stationMap = createStationMap({
+  container: document.querySelector("#station-map"),
+  message: document.querySelector("#map-message"),
+  count: document.querySelector("#map-count"),
+});
 let allStations = [];
+let mapNeedsFit = false;
 let currentPage = 1;
 let pageSize = Number(pageSizeSelect.value);
 let sortKey = "name";
@@ -273,6 +281,8 @@ function renderStations() {
   const selectedStatus = selectedStatuses();
   const filtered = filterStations(allStations, { fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const sorted = sortStations(filtered, selectedFuel);
+  stationMap.render(sorted, selectedFuel, { fit: mapNeedsFit });
+  mapNeedsFit = false;
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
   const firstIndex = (currentPage - 1) * pageSize;
@@ -353,6 +363,8 @@ async function loadSummary({ refresh = false } = {}) {
     const path = refresh ? "/api/cache/refresh" : "/api/summary";
     const data = await fetchJson(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
     allStations = data.stations;
+    mapSection.hidden = false;
+    mapNeedsFit = true;
     renderSummary(data);
     renderStations();
     const messages = [...(data.warnings || [])];
@@ -361,6 +373,8 @@ async function loadSummary({ refresh = false } = {}) {
     notice.textContent = messages.join(" ");
   } catch (error) {
     allStations = [];
+    stationMap.clear();
+    mapSection.hidden = true;
     overview.hidden = true;
     summaryDetails.hidden = true;
     statusLegend.hidden = true;

@@ -8,6 +8,7 @@
 | Domain | Provider-neutral normalization, merge and summary rules | `domain/stations.js` |
 | External adapters | One module per station/price provider | `providers/` |
 | Frontend | Static HTML/CSS with modular browser JavaScript | `public/` |
+| Map UI | Leaflet 1.9.4 and Leaflet.markercluster 1.5.3 loaded from pinned CDN URLs; OpenStreetMap tiles | `public/index.html`, `public/station-map.js` |
 | Browser integration | Headless Chrome/Edge via Chrome DevTools Protocol | `providers/sber-browser.js` |
 | Telegram interface | Telegram Bot API long polling over built-in Fetch API | `services/telegram-gateway.js`, `services/telegram-bot.js` |
 | Package manager | npm | `package.json` |
@@ -20,6 +21,7 @@
 | Service | Role | Access |
 | --- | --- | --- |
 | OpenStreetMap Nominatim | Territory geocoding | Public endpoint with identifying User-Agent and rate limit |
+| OpenStreetMap tiles | Interactive station-map baselayer | Public tile endpoint with visible attribution |
 | T-Bank Fuel | Stations and probabilistic availability | Public, undocumented endpoint |
 | Alfa AZS | Nationwide station snapshot, probabilistic availability and prices | Public, undocumented endpoint with in-memory HTTP cookie challenge |
 | BenzUp | Station catalog and prices | Bearer token |
