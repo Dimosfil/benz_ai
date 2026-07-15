@@ -1,9 +1,9 @@
 import {
   labels,
   selectionStatus,
+  stationConfidence,
+  stationFuelEntries,
   stationFreshText,
-  stationFuelText,
-  stationPriceText,
   stationSources,
 } from "./station-view.js";
 import { filterStations } from "./station-filter.js";
@@ -13,6 +13,13 @@ const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", 
 const MIN_VIEWPORT_ZOOM = 8;
 const VIEWPORT_DEBOUNCE_MS = 400;
 const VIEWPORT_REQUEST_TIMEOUT_MS = 18_000;
+const STATUS_HEADLINES = Object.freeze({
+  available: "Топливо, вероятно, есть",
+  maybe_available: "Топливо, возможно, есть",
+  not_available: "Топлива, вероятно, нет",
+  no_data: "Данных о наличии нет",
+});
+const STATUS_ICONS = Object.freeze({ available: "✓", maybe_available: "?", not_available: "!", no_data: "·" });
 
 export function hasMapCoordinates(station) {
   if (station?.lat == null || station?.lon == null) return false;
@@ -47,36 +54,101 @@ function text(tag, value, className) {
   return node;
 }
 
+function element(tag, className) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  return node;
+}
+
+function appendLink(container, href, label, className = "") {
+  if (!href) return;
+  const link = text("a", label, className);
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  container.append(link);
+}
+
 function popupFor(station, selectedFuels) {
   const status = stationMapStatus(station, selectedFuels);
+  const confidence = stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
-  popup.className = "map-popup";
-  popup.append(
-    text("p", stationSources(station), "map-popup-sources"),
+  popup.className = `map-popup map-popup-${status}`;
+
+  const header = element("header", "map-popup-header");
+  header.append(text("span", (station.name || "АЗС").trim().slice(0, 1).toUpperCase(), "map-popup-monogram"));
+  const identity = element("div", "map-popup-identity");
+  identity.append(
     text("h3", station.name || "АЗС"),
     text("p", station.address || "Адрес не указан", "map-popup-address"),
   );
-  const facts = document.createElement("div");
-  facts.className = "map-popup-facts";
-  facts.append(
-    text("span", labels[status] || labels.no_data, `badge ${status}`),
-    text("p", stationFuelText(station, selectedFuels)),
-    text("p", stationPriceText(station)),
-    text("p", stationFreshText(station)),
+  header.append(identity);
+  popup.append(header);
+
+  const statusCard = element("section", `map-popup-status ${status}`);
+  const statusTop = element("div", "map-popup-status-top");
+  statusTop.append(
+    text("span", STATUS_ICONS[status], "map-popup-status-icon"),
+    text("strong", STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
   );
-  popup.append(facts);
-  if (station.detail) popup.append(text("p", station.detail, "map-popup-detail"));
+  statusCard.append(statusTop);
+  if (confidence) {
+    const confidenceRow = element("div", "map-popup-confidence");
+    const confidenceCopy = element("div", "map-popup-confidence-copy");
+    confidenceCopy.append(
+      text("span", "Согласованность источников"),
+      text("strong", `${confidence.percent}%`),
+    );
+    const meter = element("div", "map-popup-meter");
+    const meterValue = element("span");
+    meterValue.style.width = `${confidence.percent}%`;
+    meter.append(meterValue);
+    confidenceRow.append(
+      confidenceCopy,
+      meter,
+      text("small", `${confidence.matching} из ${confidence.total} сигналов совпадают`),
+    );
+    statusCard.append(confidenceRow);
+  } else {
+    statusCard.append(text("p", "Статус рассчитан по доступным данным агрегатора.", "map-popup-status-note"));
+  }
+  if (station.detail) statusCard.append(text("p", station.detail, "map-popup-detail"));
+  popup.append(statusCard);
+
+  const fuels = stationFuelEntries(station, selectedFuels);
+  if (fuels.length) {
+    const fuelSection = element("section", "map-popup-section");
+    fuelSection.append(text("h4", "Топливо и цены"));
+    const fuelList = element("div", "map-popup-fuel-list");
+    fuels.forEach((fuel) => {
+      const row = element("div", "map-popup-fuel-row");
+      const name = element("div", "map-popup-fuel-name");
+      name.append(
+        text("i", "", `map-popup-fuel-dot ${fuel.status}`),
+        text("strong", fuel.name),
+        text("span", labels[fuel.status] || labels.no_data),
+      );
+      row.append(name, text("strong", fuel.price == null
+        ? "—"
+        : `${fuel.price.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`, "map-popup-price"));
+      fuelList.append(row);
+    });
+    fuelSection.append(fuelList);
+    popup.append(fuelSection);
+  }
+
+  const meta = element("section", "map-popup-meta");
+  meta.append(
+    text("p", stationFreshText(station), "map-popup-fresh"),
+    text("p", stationSources(station), "map-popup-sources"),
+  );
+  popup.append(meta);
 
   const links = document.createElement("div");
   links.className = "map-popup-links";
-  [[station.links?.yandex, "Яндекс Карты"], [station.links?.twoGis, "2ГИС"]].forEach(([href, label]) => {
-    if (!href) return;
-    const link = text("a", label);
-    link.href = href;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    links.append(link);
-  });
+  const primaryLink = station.links?.yandex || station.links?.twoGis;
+  appendLink(links, primaryLink, "Проложить маршрут ↗", "map-popup-route");
+  if (station.links?.yandex && station.links?.twoGis) appendLink(links, station.links.twoGis, "Открыть в 2ГИС", "map-popup-secondary-link");
   if (links.childElementCount) popup.append(links);
   return popup;
 }
@@ -146,7 +218,7 @@ export function createStationMap({ container, message, count }) {
         icon: markerIcon(L, status),
         title: station.name || "АЗС",
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
-      }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 340, minWidth: 250 });
+      }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 410, minWidth: 300, className: "station-popup" });
     });
     markers.addLayers(layers);
     count.textContent = `${valid.length.toLocaleString("ru-RU")} АЗС`;

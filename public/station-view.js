@@ -48,6 +48,43 @@ export function stationPriceText(station) {
     .join(" · ") || "Цены не опубликованы";
 }
 
+export function stationFuelEntries(station, selected = []) {
+  const fuels = selected.length
+    ? selected
+    : [...new Set([...Object.keys(station.fuelStatus || {}), ...Object.keys(station.prices || {})])];
+  return fuels.sort((a, b) => a.localeCompare(b, "ru", { numeric: true })).map((type) => {
+    const price = Number(station.prices?.[type]?.value);
+    return {
+      type,
+      name: fuelName(type),
+      status: station.fuelStatus?.[type] || "no_data",
+      price: Number.isFinite(price) ? price : null,
+    };
+  });
+}
+
+export function stationConfidence(station, selected = []) {
+  const displayedStatus = selectionStatus(station, selected);
+  const signals = Object.values(station.availabilityBySource || {}).map((signal) => {
+    if (!selected.length) return signal.overallStatus;
+    const values = selected.map((type) => signal.fuelStatus?.[type]).filter(Boolean);
+    if (!values.length) return "no_data";
+    return new Set(values).size === 1 ? values[0] : "maybe_available";
+  }).filter((status) => status && status !== "no_data");
+
+  if (!signals.length || displayedStatus === "no_data") return null;
+  const counts = signals.reduce((result, status) => {
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, {});
+  const matching = Math.max(...Object.values(counts));
+  return {
+    matching,
+    total: signals.length,
+    percent: Math.round((matching / signals.length) * 100),
+  };
+}
+
 export function stationFreshText(station) {
   const availability = station.lastTransactionAt
     ? `Наличие: ${formatter.format(new Date(station.lastTransactionAt))}`
