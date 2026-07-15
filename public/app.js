@@ -36,6 +36,7 @@ const count = document.querySelector("#count");
 const meta = document.querySelector("#meta");
 const template = document.querySelector("#station");
 const overview = document.querySelector("#overview");
+const summaryDetails = document.querySelector("#summary-details");
 const statusLegend = document.querySelector("#status-legend");
 const findButton = document.querySelector("#find");
 const refreshButton = document.querySelector("#refresh-cache");
@@ -216,6 +217,7 @@ function metric(value, label) {
 
 function renderSummary(data) {
   overview.hidden = false;
+  summaryDetails.hidden = false;
   statusLegend.hidden = false;
   document.querySelector("#place-name").textContent = data.location.name;
   document.querySelector("#place-meta").textContent = data.location.displayName;
@@ -360,6 +362,7 @@ async function loadSummary({ refresh = false } = {}) {
   } catch (error) {
     allStations = [];
     overview.hidden = true;
+    summaryDetails.hidden = true;
     statusLegend.hidden = true;
     renderStations();
     notice.hidden = false;

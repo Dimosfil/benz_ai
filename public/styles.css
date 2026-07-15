@@ -29,6 +29,7 @@ button:disabled{opacity:.6;cursor:wait}
 .place{margin:34px 0 15px}
 .place h2{margin:.3rem 0;font-size:1.6rem}
 .place p:last-child{margin:0;color:#66736b}
+.summary-details{margin-top:28px}
 .summary-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .metric{background:#fff;border-radius:14px;padding:16px}
 .metric strong{display:block;font-size:1.7rem}
