@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  clusterStatusChart,
   hasMapCoordinates,
   padViewportBounds,
   stationMapStatus,
@@ -8,6 +9,20 @@ import {
   stationWithinBounds,
   uncoveredViewportBounds,
 } from "./public/station-map.js";
+
+test("map cluster chart reflects the child station status distribution", () => {
+  assert.equal(clusterStatusChart(["not_available", "not_available"]), "#ef4444");
+  assert.equal(
+    clusterStatusChart(["available", "not_available"]),
+    "conic-gradient(#12b76a 0% 50%, #ef4444 50% 100%)",
+  );
+  assert.equal(
+    clusterStatusChart(["available", "maybe_available", "not_available", "no_data"]),
+    "conic-gradient(#12b76a 0% 25%, #f59e0b 25% 50%, #ef4444 50% 75%, #64748b 75% 100%)",
+  );
+  assert.equal(clusterStatusChart([]), "#64748b");
+  assert.equal(clusterStatusChart(["unexpected"]), "#64748b");
+});
 
 test("map accepts valid station coordinates and rejects invalid values", () => {
   assert.equal(hasMapCoordinates({ lat: 51.67, lon: 39.21 }), true);

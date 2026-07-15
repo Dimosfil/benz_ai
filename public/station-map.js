@@ -10,6 +10,13 @@ import { filterStations } from "./station-filter.js";
 import { fetchJson } from "./api-client.js";
 
 const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", "no_data"]);
+const STATUS_CHART_COLORS = Object.freeze({
+  available: "#12b76a",
+  maybe_available: "#f59e0b",
+  not_available: "#ef4444",
+  no_data: "#64748b",
+});
+const STATUS_CHART_ORDER = Object.freeze(Object.keys(STATUS_CHART_COLORS));
 const MIN_VIEWPORT_ZOOM = 8;
 const VIEWPORT_DEBOUNCE_MS = 400;
 const VIEWPORT_REQUEST_TIMEOUT_MS = 18_000;
@@ -36,6 +43,25 @@ export function hasMapCoordinates(station) {
 export function stationMapStatus(station, selectedFuels = []) {
   const status = selectionStatus(station, selectedFuels);
   return STATUS_COLORS.has(status) ? status : "no_data";
+}
+
+export function clusterStatusChart(statuses = []) {
+  const normalized = statuses.length
+    ? statuses.map((status) => STATUS_COLORS.has(status) ? status : "no_data")
+    : ["no_data"];
+  const counts = new Map(STATUS_CHART_ORDER.map((status) => [status, 0]));
+  normalized.forEach((status) => counts.set(status, counts.get(status) + 1));
+  const present = STATUS_CHART_ORDER.filter((status) => counts.get(status) > 0);
+  if (present.length === 1) return STATUS_CHART_COLORS[present[0]];
+
+  let consumed = 0;
+  const segments = present.map((status) => {
+    const start = consumed / normalized.length * 100;
+    consumed += counts.get(status);
+    const end = consumed / normalized.length * 100;
+    return `${STATUS_CHART_COLORS[status]} ${start}% ${end}%`;
+  });
+  return `conic-gradient(${segments.join(", ")})`;
 }
 
 export function stationViewportUrl({ south, north, west, east }) {
@@ -228,9 +254,11 @@ function markerIcon(L, status) {
 function clusterIcon(L, cluster) {
   const count = cluster.getChildCount();
   const size = count >= 100 ? "large" : count >= 10 ? "medium" : "small";
+  const statuses = cluster.getAllChildMarkers().map((marker) => marker.options.stationStatus);
+  const statusChart = clusterStatusChart(statuses);
   return L.divIcon({
     className: "station-cluster-wrap",
-    html: `<span class="station-cluster ${size}">${count}</span>`,
+    html: `<span class="station-cluster ${size}" style="--cluster-status-chart:${statusChart}"><span>${count}</span></span>`,
     iconSize: [46, 46],
   });
 }
@@ -316,6 +344,7 @@ export function createStationMap({ container, message, count }) {
       const status = stationMapStatus(station, filters.fuels);
       return L.marker([Number(station.lat), Number(station.lon)], {
         icon: markerIcon(L, status),
+        stationStatus: status,
         title: station.name || "АЗС",
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
       }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 410, minWidth: 300, className: "station-popup" });

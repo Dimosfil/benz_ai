@@ -92,6 +92,11 @@
   managed production secret stores, scoped permissions, usage monitoring,
   rotation, and network restrictions where supported. Follow
   `patterns/API_KEY_SECRET_SAFETY.md`.
+- Do not turn a credential pasted into chat into a whole-task development
+  blocker. Warn once without repeating the value, recommend rotation, and keep
+  working on every independent step that can be completed without exposing or
+  unsafely persisting the credential. Block or leave unverified only the
+  specific operation that has no safe credential path.
 - Build applications with clear architecture and code-quality boundaries. Apply
   OOP, SOLID, DRY, clean-code, maintainability, and extensibility principles
   where they fit the stack. Keep domain/product logic, orchestration, UI,

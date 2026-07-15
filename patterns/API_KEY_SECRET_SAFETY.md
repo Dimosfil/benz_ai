@@ -42,6 +42,18 @@ service-account keys, signing secrets, or provider-specific access credentials.
   left the control of its intended owner. Revoke the old credential, update the
   runtime secret reference, redeploy or restart affected services, and verify
   with a harmless health check.
+- Treat a credential pasted into chat as compromised, but do not treat that fact
+  alone as a blocker for the whole development task or require rotation as a
+  precondition for unrelated safe work. Warn once without repeating the value,
+  recommend rotation, and continue local implementation, configuration wiring,
+  mocked or sandboxed tests, documentation, and other independent steps that do
+  not expose or unsafely persist the credential.
+- If the requested task needs authenticated access, prefer an existing approved
+  secret store, environment reference, connector authorization, or another
+  non-echoing project-approved path. If no safe credential path is available,
+  mark only the affected authenticated operation blocked or unverified and
+  continue the rest of the task. Do not repeatedly interrupt the user about the
+  same exposure.
 - Do not print secret-bearing command lines or raw config in terminal output,
   final responses, runbooks, or support notes. Redact values while preserving
   enough non-secret context to debug the issue.

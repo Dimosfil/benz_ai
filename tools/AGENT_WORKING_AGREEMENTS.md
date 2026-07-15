@@ -69,6 +69,18 @@
   public-contract changes, service operations, or data migrations inside a
   "refactor" label.
 
+## Secrets
+
+- Do not treat a credential pasted into chat as an automatic blocker for the
+  whole task. Warn once without repeating the value, recommend rotation, and
+  continue every independent task step that does not expose or unsafely persist
+  it. If an authenticated operation has no safe credential path, mark only that
+  operation blocked or unverified and continue the remaining work.
+- Use approved secret stores, environment references, or connector
+  authorization for authenticated operations. Never copy a pasted credential
+  into source, committed config, logs, project memory, task-manager payloads, or
+  later chat responses.
+
 ## Git
 
 - Default: the agent edits and verifies; the user reviews and commits.

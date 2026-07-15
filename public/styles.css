@@ -142,8 +142,10 @@ button:disabled{opacity:.6;cursor:wait}
 .station-marker.maybe_available{background:#b56b00;box-shadow:0 0 0 5px #f59e0b35,0 5px 14px #9a5b0088}
 .station-marker.not_available{background:#b42318;box-shadow:0 0 0 5px #ef444435,0 5px 14px #b4231888}
 .station-marker.no_data{background:#475569;box-shadow:0 0 0 5px #64748b30,0 5px 14px #33415577}
-.station-cluster{display:grid;width:44px;height:44px;place-items:center;border:4px solid #58e6a2;border-radius:50%;background:#10251e;color:#fff;font-size:.82rem;font-weight:900;box-shadow:0 0 0 3px #ffffffcc,0 4px 15px #10251e55}
+.station-cluster{display:grid;width:44px;height:44px;place-items:center;border:3px solid #fff;border-radius:50%;background:var(--cluster-status-chart,#64748b);color:#fff;font-size:.82rem;font-weight:900;box-shadow:0 0 0 2px #ffffffaa,0 4px 15px #10251e55}
+.station-cluster>span{display:grid;width:25px;height:25px;place-items:center;border-radius:50%;background:#10251eea;box-shadow:0 0 0 2px #ffffffcc}
 .station-cluster.medium{width:48px;height:48px}.station-cluster.large{width:52px;height:52px}
+.station-cluster.medium>span{width:27px;height:27px}.station-cluster.large>span{width:29px;height:29px}
 .station-popup .leaflet-popup-content-wrapper{overflow:hidden;border:1px solid #dfe7e1;border-radius:22px;background:#fbfdfb;box-shadow:0 22px 55px #10251e35}
 .station-popup .leaflet-popup-content{width:380px!important;margin:0;line-height:1.4}
 .station-popup .leaflet-popup-tip{background:#fbfdfb}

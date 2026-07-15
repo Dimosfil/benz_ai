@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.07.14.1",
+  "instruction_kit_version": "2026.07.15.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
@@ -170,7 +170,8 @@
     "2026.07.10.1__harden_gi_init_bootstrap_entrypoint",
     "2026.07.13.1__enforce_git_finalization_boundary",
     "2026.07.13.2__keep_one_off_probes_out_of_tools",
-    "2026.07.14.1__require_startup_migration_auto_apply"
+    "2026.07.14.1__require_startup_migration_auto_apply",
+    "2026.07.15.1__continue_development_after_chat_secret_exposure"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -228,5 +229,5 @@
     "patterns/AGENTS_RUNTIME/18-startup-product-engineering.md",
     "patterns/AGENTS_RUNTIME/19-game-modding.md"
   ],
-  "last_update_check_at": "2026-07-14T13:47:25+03:00"
+  "last_update_check_at": "2026-07-15T00:00:00+03:00"
 }
