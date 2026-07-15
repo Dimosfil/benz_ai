@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasMapCoordinates, stationMapStatus, stationViewportUrl } from "./public/station-map.js";
+import {
+  hasMapCoordinates,
+  padViewportBounds,
+  stationMapStatus,
+  stationViewportUrl,
+  stationWithinBounds,
+  uncoveredViewportBounds,
+} from "./public/station-map.js";
 
 test("map accepts valid station coordinates and rejects invalid values", () => {
   assert.equal(hasMapCoordinates({ lat: 51.67, lon: 39.21 }), true);
@@ -22,4 +29,31 @@ test("map viewport request uses the visible bounds", () => {
   assert.equal(url.searchParams.get("mode"), "viewport");
   assert.equal(url.searchParams.get("minLat"), "51.500000");
   assert.equal(url.searchParams.get("maxLon"), "39.400000");
+});
+
+test("map pads the viewport for prefetch and retains stations inside the outer frame", () => {
+  const visible = { south: 50, north: 52, west: 38, east: 42 };
+  assert.deepEqual(padViewportBounds(visible, 0.5), { south: 49, north: 53, west: 36, east: 44 });
+  assert.equal(stationWithinBounds({ lat: 52.8, lon: 43.5 }, padViewportBounds(visible, 0.5)), true);
+  assert.equal(stationWithinBounds({ lat: 53.2, lon: 43.5 }, padViewportBounds(visible, 0.5)), false);
+});
+
+test("small map shifts inside the prefetched frame need no new request", () => {
+  const loaded = { south: 49, north: 53, west: 36, east: 44 };
+  const desired = { south: 49.2, north: 52.8, west: 36.2, east: 43.8 };
+  assert.deepEqual(uncoveredViewportBounds(loaded, desired), []);
+});
+
+test("map requests only newly exposed strips after a shift", () => {
+  const loaded = { south: 49, north: 53, west: 36, east: 44 };
+  const desired = { south: 50, north: 54, west: 37, east: 45 };
+  assert.deepEqual(uncoveredViewportBounds(loaded, desired), [
+    { south: 53, north: 54, west: 37, east: 45 },
+    { south: 50, north: 53, west: 44, east: 45 },
+  ]);
+});
+
+test("map requests the whole padded viewport after a distant jump", () => {
+  const desired = { south: 60, north: 62, west: 70, east: 72 };
+  assert.deepEqual(uncoveredViewportBounds({ south: 49, north: 53, west: 36, east: 44 }, desired), [desired]);
 });

@@ -13,6 +13,8 @@ const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", 
 const MIN_VIEWPORT_ZOOM = 8;
 const VIEWPORT_DEBOUNCE_MS = 400;
 const VIEWPORT_REQUEST_TIMEOUT_MS = 18_000;
+const VIEWPORT_PREFETCH_RATIO = 0.45;
+const VIEWPORT_RETENTION_RATIO = 1;
 const STATUS_HEADLINES = Object.freeze({
   available: "Топливо, вероятно, есть",
   maybe_available: "Топливо, возможно, есть",
@@ -45,6 +47,66 @@ export function stationViewportUrl({ south, north, west, east }) {
     maxLon: Number(east).toFixed(6),
   });
   return `/api/stations?${params}`;
+}
+
+export function padViewportBounds(bounds, ratio) {
+  const latitudePadding = (bounds.north - bounds.south) * ratio;
+  const longitudePadding = (bounds.east - bounds.west) * ratio;
+  return {
+    south: Math.max(-90, bounds.south - latitudePadding),
+    north: Math.min(90, bounds.north + latitudePadding),
+    west: Math.max(-180, bounds.west - longitudePadding),
+    east: Math.min(180, bounds.east + longitudePadding),
+  };
+}
+
+export function stationWithinBounds(station, bounds) {
+  if (!hasMapCoordinates(station)) return false;
+  const latitude = Number(station.lat);
+  const longitude = Number(station.lon);
+  return latitude >= bounds.south && latitude <= bounds.north
+    && longitude >= bounds.west && longitude <= bounds.east;
+}
+
+export function uncoveredViewportBounds(loaded, desired) {
+  if (!loaded) return [desired];
+  const overlaps = loaded.west < desired.east && loaded.east > desired.west
+    && loaded.south < desired.north && loaded.north > desired.south;
+  if (!overlaps) return [desired];
+
+  const areas = [];
+  if (desired.north > loaded.north) {
+    areas.push({ ...desired, south: Math.max(desired.south, loaded.north) });
+  }
+  if (desired.south < loaded.south) {
+    areas.push({ ...desired, north: Math.min(desired.north, loaded.south) });
+  }
+
+  const overlapSouth = Math.max(desired.south, loaded.south);
+  const overlapNorth = Math.min(desired.north, loaded.north);
+  if (overlapNorth > overlapSouth && desired.west < loaded.west) {
+    areas.push({ south: overlapSouth, north: overlapNorth, west: desired.west, east: Math.min(desired.east, loaded.west) });
+  }
+  if (overlapNorth > overlapSouth && desired.east > loaded.east) {
+    areas.push({ south: overlapSouth, north: overlapNorth, west: Math.max(desired.west, loaded.east), east: desired.east });
+  }
+  return areas.filter((area) => area.north > area.south && area.east > area.west);
+}
+
+function plainMapBounds(bounds) {
+  return {
+    south: bounds.getSouth(),
+    north: bounds.getNorth(),
+    west: bounds.getWest(),
+    east: bounds.getEast(),
+  };
+}
+
+function stationCacheKey(station) {
+  const latitude = Number(station.lat).toFixed(5);
+  const longitude = Number(station.lon).toFixed(5);
+  const name = String(station.name || "").trim().toLocaleLowerCase("ru-RU");
+  return `${latitude}:${longitude}:${name}`;
 }
 
 function text(tag, value, className) {
@@ -195,6 +257,8 @@ export function createStationMap({ container, message, count }) {
   map.addLayer(markers);
   map.setView([55.75, 37.62], 5);
   let viewportStations = [];
+  const stationCache = new Map();
+  let loadedBounds = null;
   let filters = { fuels: [], statuses: [], text: "" };
   let loadTimer = null;
   let activeRequest = null;
@@ -206,6 +270,41 @@ export function createStationMap({ container, message, count }) {
   function showMessage(value) {
     message.textContent = value || "";
     message.hidden = !value;
+  }
+
+  function visibleFilteredStations() {
+    const visibleBounds = plainMapBounds(map.getBounds());
+    return filterStations(viewportStations, filters)
+      .filter((station) => stationWithinBounds(station, visibleBounds));
+  }
+
+  function updateVisibleCount({ loading = false } = {}) {
+    const visible = visibleFilteredStations();
+    count.textContent = `${visible.length.toLocaleString("ru-RU")} АЗС${loading ? " · догружаем…" : ""}`;
+    if (!loading) showMessage(visible.length || !viewportStations.length ? "" : "По выбранным фильтрам на карте нет АЗС.");
+    return visible.length;
+  }
+
+  function syncStationCache() {
+    viewportStations = [...stationCache.values()];
+  }
+
+  function mergeStations(stations) {
+    for (const station of stations) {
+      if (hasMapCoordinates(station)) stationCache.set(stationCacheKey(station), station);
+    }
+    syncStationCache();
+  }
+
+  function pruneStationCache(bounds) {
+    let changed = false;
+    for (const [key, station] of stationCache) {
+      if (stationWithinBounds(station, bounds)) continue;
+      stationCache.delete(key);
+      changed = true;
+    }
+    if (changed) syncStationCache();
+    return changed;
   }
 
   function renderMarkers() {
@@ -221,8 +320,7 @@ export function createStationMap({ container, message, count }) {
       }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 410, minWidth: 300, className: "station-popup" });
     });
     markers.addLayers(layers);
-    count.textContent = `${valid.length.toLocaleString("ru-RU")} АЗС`;
-    showMessage(valid.length || !viewportStations.length ? "" : "По выбранным фильтрам на карте нет АЗС.");
+    updateVisibleCount();
     requestAnimationFrame(() => map.invalidateSize());
   }
 
@@ -238,10 +336,24 @@ export function createStationMap({ container, message, count }) {
     if (map.getZoom() < MIN_VIEWPORT_ZOOM) {
       activeRequest?.abort();
       activeRequest = null;
+      loadedBounds = null;
+      stationCache.clear();
       viewportStations = [];
       markers.clearLayers();
       count.textContent = "0 АЗС";
       showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
+      return;
+    }
+
+    const visibleBounds = plainMapBounds(map.getBounds());
+    const desiredBounds = padViewportBounds(visibleBounds, VIEWPORT_PREFETCH_RATIO);
+    const retentionBounds = padViewportBounds(visibleBounds, VIEWPORT_RETENTION_RATIO);
+    const requestBounds = uncoveredViewportBounds(loadedBounds, desiredBounds);
+    if (!requestBounds.length) {
+      if (pruneStationCache(retentionBounds)) {
+        loadedBounds = desiredBounds;
+        renderMarkers();
+      } else updateVisibleCount();
       return;
     }
 
@@ -254,27 +366,22 @@ export function createStationMap({ container, message, count }) {
       timedOut = true;
       request.abort();
     }, VIEWPORT_REQUEST_TIMEOUT_MS);
-    viewportStations = [];
-    markers.clearLayers();
-    count.textContent = "…";
-    showMessage("Загружаем АЗС в видимой области…");
-    const bounds = map.getBounds();
+    const hasCachedStations = stationCache.size > 0;
+    updateVisibleCount({ loading: true });
+    if (!hasCachedStations) showMessage("Загружаем АЗС рядом с видимой областью…");
     try {
-      const data = await fetchJson(stationViewportUrl({
-        south: bounds.getSouth(),
-        north: bounds.getNorth(),
-        west: bounds.getWest(),
-        east: bounds.getEast(),
-      }), { signal: request.signal });
+      const responses = await Promise.all(requestBounds.map((bounds) => fetchJson(
+        stationViewportUrl(bounds),
+        { signal: request.signal },
+      )));
       if (request.signal.aborted || sequence !== requestSequence) return;
-      viewportStations = Array.isArray(data.stations) ? data.stations : [];
+      mergeStations(responses.flatMap((data) => Array.isArray(data.stations) ? data.stations : []));
+      loadedBounds = desiredBounds;
+      pruneStationCache(retentionBounds);
       renderMarkers();
-      if (!viewportStations.length) showMessage("В видимой области АЗС не найдены.");
     } catch (error) {
       if (sequence !== requestSequence || (request.signal.aborted && !timedOut)) return;
-      viewportStations = [];
-      markers.clearLayers();
-      count.textContent = "0 АЗС";
+      updateVisibleCount();
       showMessage(timedOut
         ? "Источники отвечают слишком долго. Передвиньте карту или повторите попытку позже."
         : error instanceof Error ? error.message : "Не удалось загрузить АЗС для этой области.");
@@ -337,6 +444,8 @@ export function createStationMap({ container, message, count }) {
   function clear() {
     cancelViewportLoad();
     requestSequence += 1;
+    loadedBounds = null;
+    stationCache.clear();
     viewportStations = [];
     markers.clearLayers();
     count.textContent = "0 АЗС";
@@ -353,7 +462,9 @@ export function createStationMap({ container, message, count }) {
       scheduleViewportLoad({ immediate: true });
       return;
     }
-    viewportStations = stations;
+    loadedBounds = null;
+    stationCache.clear();
+    mergeStations(stations);
     renderMarkers();
     map.invalidateSize();
     const valid = stations.filter(hasMapCoordinates);
