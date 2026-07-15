@@ -19,6 +19,7 @@ test("map marker status follows the selected fuel aggregation", () => {
 test("map viewport request uses the visible bounds", () => {
   const url = new URL(stationViewportUrl({ south: 51.5, north: 51.8, west: 39, east: 39.4 }), "http://localhost");
   assert.equal(url.pathname, "/api/stations");
+  assert.equal(url.searchParams.get("mode"), "viewport");
   assert.equal(url.searchParams.get("minLat"), "51.500000");
   assert.equal(url.searchParams.get("maxLon"), "39.400000");
 });

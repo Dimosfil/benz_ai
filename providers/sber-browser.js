@@ -8,6 +8,8 @@ const DEFAULT_REFRESH_MS = 60_000;
 const ACTIVE_AREA_TTL_MS = 15 * 60_000;
 const MAX_ACTIVE_AREAS = 10;
 const DEFAULT_BROWSER_IDLE_MS = 30_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 12_000;
+const CDP_COMMAND_TIMEOUT_MS = 15_000;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,6 +65,7 @@ class CdpClient {
       if (!message.id || !this.pending.has(message.id)) return;
       const pending = this.pending.get(message.id);
       this.pending.delete(message.id);
+      clearTimeout(pending.timer);
       if (message.error) pending.reject(new Error(message.error.message));
       else pending.resolve(message.result);
     };
@@ -72,10 +75,15 @@ class CdpClient {
     });
   }
 
-  send(method, params = {}) {
+  send(method, params = {}, timeoutMs = CDP_COMMAND_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
       const id = ++this.nextId;
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Chrome DevTools timeout: ${method}`));
+      }, timeoutMs);
+      timer.unref?.();
+      this.pending.set(id, { resolve, reject, timer });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -88,7 +96,10 @@ class CdpClient {
 
   close() {
     try { this.socket?.close(); } catch {}
-    for (const pending of this.pending.values()) pending.reject(new Error("Chrome DevTools закрыт"));
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("Chrome DevTools закрыт"));
+    }
     this.pending.clear();
   }
 }
@@ -99,11 +110,13 @@ export class SberBrowserWorker {
     activeAreaTtlMs = ACTIVE_AREA_TTL_MS,
     maxActiveAreas = MAX_ACTIVE_AREAS,
     browserIdleMs = DEFAULT_BROWSER_IDLE_MS,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   } = {}) {
     this.refreshMs = refreshMs;
     this.activeAreaTtlMs = activeAreaTtlMs;
     this.maxActiveAreas = maxActiveAreas;
     this.browserIdleMs = browserIdleMs;
+    this.requestTimeoutMs = requestTimeoutMs;
     this.chrome = null;
     this.profileDir = null;
     this.cdp = null;
@@ -257,7 +270,7 @@ export class SberBrowserWorker {
   async refreshArea(area) {
     await this.ensureStarted();
     const bbox = [area.bbox.minLon, area.bbox.minLat, area.bbox.maxLon, area.bbox.maxLat].join(",");
-    const expression = `(async()=>{const response=await fetch(${JSON.stringify(`/api/stations?bbox=${bbox}`)},{headers:{Accept:"application/json"}});const text=await response.text();if(!response.ok)throw new Error("Sber HTTP "+response.status);let data;try{data=JSON.parse(text)}catch{throw new Error("Sber вернул не JSON")};return data})()`;
+    const expression = `(async()=>{const response=await fetch(${JSON.stringify(`/api/stations?bbox=${bbox}`)},{headers:{Accept:"application/json"},signal:AbortSignal.timeout(${this.requestTimeoutMs})});const text=await response.text();if(!response.ok)throw new Error("Sber HTTP "+response.status);let data;try{data=JSON.parse(text)}catch{throw new Error("Sber вернул не JSON")};return data})()`;
     try {
       area.data = await this.cdp.evaluate(expression);
       area.fetchedAt = Date.now();
@@ -308,6 +321,7 @@ export class SberBrowserWorker {
       refreshMs: this.refreshMs,
       activeAreaTtlMs: this.activeAreaTtlMs,
       browserIdleMs: this.browserIdleMs,
+      requestTimeoutMs: this.requestTimeoutMs,
       lastActivityAt: this.lastActivityAt ? new Date(this.lastActivityAt).toISOString() : null,
       lastStartedAt: this.lastStartedAt,
       lastStoppedAt: this.lastStoppedAt,

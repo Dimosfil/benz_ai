@@ -12,6 +12,7 @@ import { fetchJson } from "./api-client.js";
 const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", "no_data"]);
 const MIN_VIEWPORT_ZOOM = 8;
 const VIEWPORT_DEBOUNCE_MS = 400;
+const VIEWPORT_REQUEST_TIMEOUT_MS = 18_000;
 
 export function hasMapCoordinates(station) {
   if (station?.lat == null || station?.lon == null) return false;
@@ -30,6 +31,7 @@ export function stationMapStatus(station, selectedFuels = []) {
 
 export function stationViewportUrl({ south, north, west, east }) {
   const params = new URLSearchParams({
+    mode: "viewport",
     minLat: Number(south).toFixed(6),
     maxLat: Number(north).toFixed(6),
     minLon: Number(west).toFixed(6),
@@ -175,6 +177,11 @@ export function createStationMap({ container, message, count }) {
     const request = new AbortController();
     activeRequest = request;
     const sequence = ++requestSequence;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      request.abort();
+    }, VIEWPORT_REQUEST_TIMEOUT_MS);
     viewportStations = [];
     markers.clearLayers();
     count.textContent = "…";
@@ -192,12 +199,15 @@ export function createStationMap({ container, message, count }) {
       renderMarkers();
       if (!viewportStations.length) showMessage("В видимой области АЗС не найдены.");
     } catch (error) {
-      if (request.signal.aborted || sequence !== requestSequence) return;
+      if (sequence !== requestSequence || (request.signal.aborted && !timedOut)) return;
       viewportStations = [];
       markers.clearLayers();
       count.textContent = "0 АЗС";
-      showMessage(error instanceof Error ? error.message : "Не удалось загрузить АЗС для этой области.");
+      showMessage(timedOut
+        ? "Источники отвечают слишком долго. Передвиньте карту или повторите попытку позже."
+        : error instanceof Error ? error.message : "Не удалось загрузить АЗС для этой области.");
     } finally {
+      clearTimeout(timeout);
       if (activeRequest === request) activeRequest = null;
     }
   }

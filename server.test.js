@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { normalizeGdebenzStation } from "./providers/gdebenz.js";
 import { normalizeMultigoStation } from "./providers/multigo.js";
 import { chromeArguments, SberBrowserWorker } from "./providers/sber-browser.js";
-import { isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices } from "./server.js";
+import { isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices, withTimeout } from "./server.js";
 
 test("starts the Sber Chromium worker without a GUI", () => {
   const args = chromeArguments("C:\\Temp\\benz-ai-sber-test");
@@ -30,6 +30,7 @@ test("reports a safe stopped Sber worker lifecycle", () => {
     activeAreaTtlMs: 34_000,
     maxActiveAreas: 2,
     browserIdleMs: 5_000,
+    requestTimeoutMs: 12_000,
   });
   assert.deepEqual(worker.status(), {
     running: false,
@@ -39,6 +40,7 @@ test("reports a safe stopped Sber worker lifecycle", () => {
     refreshMs: 12_000,
     activeAreaTtlMs: 34_000,
     browserIdleMs: 5_000,
+    requestTimeoutMs: 12_000,
     lastActivityAt: null,
     lastStartedAt: null,
     lastStoppedAt: null,
@@ -46,6 +48,13 @@ test("reports a safe stopped Sber worker lifecycle", () => {
     lastRefreshAt: null,
     lastError: null,
   });
+});
+
+test("bounds a slow viewport provider call", async () => {
+  await assert.rejects(
+    withTimeout(new Promise(() => {}), 5, "ожидание данных"),
+    /превышено время ожидания/,
+  );
 });
 
 test("removes stale Sber areas before scheduling an idle browser close", async () => {

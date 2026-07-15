@@ -50,6 +50,15 @@ function fulfilled(result) {
   return result.status === "fulfilled" ? result.value : null;
 }
 
+export function withTimeout(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: превышено время ожидания ${Math.ceil(timeoutMs / 1000)} с`)), timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export function providerFailureMessage(result, source) {
   if (result.status !== "rejected") return null;
   const detail = String(result.reason?.message || "").trim();
@@ -60,19 +69,24 @@ export function providerFailureMessage(result, source) {
   return `${source}: ${detail}`;
 }
 
-async function searchStations(bbox) {
-  const key = JSON.stringify(bbox);
+async function searchStations(bbox, { mode = "full" } = {}) {
+  const viewport = mode === "viewport";
+  const key = `${mode}:${JSON.stringify(bbox)}`;
   const saved = readFreshCache(resultCache, key, config.resultCacheTtlMs);
   if (saved) return { ...saved, cached: true };
 
-  const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled([
+  const providerCalls = [
     fetchTbank(bbox),
     fetchAlfa(bbox),
     fetchSber(sberWorker, bbox),
     fetchBenzup(bbox),
     fetchGdebenz(bbox),
     fetchMultigo(bbox),
-  ]);
+  ];
+  const providerPromises = viewport
+    ? providerCalls.map((call) => withTimeout(call, config.viewportProviderTimeoutMs, "ожидание данных"))
+    : providerCalls;
+  const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled(providerPromises);
   const tbank = fulfilled(tbankResult);
   const alfa = fulfilled(alfaResult);
   const sber = fulfilled(sberResult);
@@ -107,7 +121,9 @@ async function searchStations(bbox) {
   else warnings.push(providerFailureMessage(multigoResult, "Multigo"));
 
   const merged = mergeStations(stations);
-  const yandex = await enrichYandexPrices(merged);
+  const yandex = viewport
+    ? { stations: merged, eligible: merged.filter(isYandexVerificationCandidate).length, attempted: 0, checked: 0, warning: null, skipped: true }
+    : await enrichYandexPrices(merged);
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
@@ -160,6 +176,7 @@ async function searchStations(bbox) {
         available: config.yandex.enabled && yandex.checked > 0,
         configured: config.yandex.enabled,
         role: "price_verification",
+        skipped: Boolean(yandex.skipped),
         eligible: yandex.eligible,
         attempted: yandex.attempted,
         checked: yandex.checked,
@@ -238,7 +255,10 @@ export function startServer(port = config.port, host = config.host) {
           cacheRefresh: { refreshed: true, completedAt: new Date().toISOString(), durationMs: Date.now() - startedAt },
         });
       }
-      if (requestUrl.pathname === "/api/stations") return json(res, 200, await searchStations(readBbox(requestUrl.searchParams)));
+      if (requestUrl.pathname === "/api/stations") {
+        const mode = requestUrl.searchParams.get("mode") === "viewport" ? "viewport" : "full";
+        return json(res, 200, await searchStations(readBbox(requestUrl.searchParams), { mode }));
+      }
       if (requestUrl.pathname === "/api/health") return json(res, 200, {
         ok: true,
         build: buildInfo,
