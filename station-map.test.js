@@ -102,3 +102,20 @@ test("viewport refresh reconciles markers without destroying an open popup", asy
   assert.match(renderMarkers, /markers\.addLayers\(added\)/);
   assert.match(source, /visible\.length \|\| !viewportStations\.length \|\| activePopupStationKey/);
 });
+
+test("map activation cancels stale hidden requests before loading the visible viewport", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+  const activation = source.match(/function activate\(focus = null\) \{([\s\S]*?)\n  \}\n\n  return/)?.[1] || "";
+
+  assert.match(activation, /deactivate\(\)/);
+  assert.match(activation, /loadedBounds = null/);
+  assert.match(activation, /invalidateSize\(\{ pan: false \}\)/);
+  assert.match(activation, /focusStations\(focus\)/);
+  assert.match(activation, /renderMarkers\(\{ loading: true \}\)/);
+  assert.match(activation, /scheduleViewportLoad\(\{ immediate: true \}\)/);
+  assert.match(source, /else if \(!deferViewportLoad\)/);
+  assert.match(source, /mergeStations\(stations\);\s+if \(deferViewportLoad\) return;\s+renderMarkers\(\)/);
+});

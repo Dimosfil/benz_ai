@@ -160,13 +160,14 @@ function setActiveTab(tabName, { focusTab = false } = {}) {
   mapTab.tabIndex = mapActive ? 0 : -1;
   tableTab.tabIndex = mapActive ? -1 : 0;
   if (focusTab) (mapActive ? mapTab : tableTab).focus();
-  if (mapActive) requestAnimationFrame(() => {
-    stationMap.resize();
-    if (pendingMapFocus) {
-      stationMap.focusStations(pendingMapFocus);
+  if (mapActive) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (activeTab !== "map") return;
+      const focus = pendingMapFocus;
       pendingMapFocus = null;
-    }
-  });
+      stationMap.activate(focus);
+    }));
+  } else stationMap.deactivate();
   scheduleSaveUIState();
 }
 
@@ -473,6 +474,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
       fit: !mapPanel.hidden,
       protectUserLocation,
       focus: mapFocus,
+      deferViewportLoad: mapPanel.hidden,
     });
     const messages = nonSourceWarnings(data.warnings, data.sources);
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);

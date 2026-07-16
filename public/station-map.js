@@ -268,7 +268,7 @@ export function createStationMap({ container, message, count }) {
   if (!L?.map || !L?.markerClusterGroup) {
     message.hidden = false;
     message.textContent = "Карта не загрузилась. Список АЗС доступен ниже.";
-    return { showStations() {}, setFilters() {}, locateUser() {}, clear() {} };
+    return { showStations() {}, setFilters() {}, locateUser() {}, clear() {}, activate() {}, deactivate() {} };
   }
 
   const map = L.map(container, { zoomControl: true, preferCanvas: true });
@@ -394,7 +394,7 @@ export function createStationMap({ container, message, count }) {
     if (added.length) markers.addLayers(added);
     if (statusChanged.length && markers.refreshClusters) markers.refreshClusters(statusChanged);
     updateVisibleCount({ loading });
-    requestAnimationFrame(() => map.invalidateSize());
+    requestAnimationFrame(() => map.invalidateSize({ pan: false }));
   }
 
   function cancelViewportLoad() {
@@ -540,7 +540,7 @@ export function createStationMap({ container, message, count }) {
   }
 
   function focusStations(stations) {
-    map.invalidateSize();
+    map.invalidateSize({ pan: false });
     const valid = stations.filter(hasMapCoordinates);
     if (!valid.length) return false;
     const bounds = L.latLngBounds(valid.map((station) => [Number(station.lat), Number(station.lon)]));
@@ -549,26 +549,42 @@ export function createStationMap({ container, message, count }) {
     return true;
   }
 
-  function showStations(stations, { fit = false, protectUserLocation = false, focus = stations } = {}) {
+  function showStations(stations, {
+    fit = false,
+    protectUserLocation = false,
+    focus = stations,
+    deferViewportLoad = false,
+  } = {}) {
     if (protectUserLocation && userLocated) {
-      scheduleViewportLoad({ immediate: true });
+      if (!deferViewportLoad) scheduleViewportLoad({ immediate: true });
       return;
     }
     loadedBounds = null;
     stationCache.clear();
     mergeStations(stations);
+    if (deferViewportLoad) return;
     renderMarkers();
-    map.invalidateSize();
+    map.invalidateSize({ pan: false });
     if (fit && focusStations(focus)) {
       // The moveend event schedules loading for the newly focused viewport.
-    } else {
+    } else if (!deferViewportLoad) {
       scheduleViewportLoad({ immediate: true });
     }
   }
 
-  function resize() {
-    map.invalidateSize();
+  function deactivate() {
+    cancelViewportLoad();
+    requestSequence += 1;
   }
 
-  return { showStations, focusStations, setFilters, locateUser, clear, resize };
+  function activate(focus = null) {
+    deactivate();
+    loadedBounds = null;
+    map.invalidateSize({ pan: false });
+    if (Array.isArray(focus) && focus.length) focusStations(focus);
+    renderMarkers({ loading: true });
+    scheduleViewportLoad({ immediate: true });
+  }
+
+  return { showStations, focusStations, setFilters, locateUser, clear, activate, deactivate };
 }

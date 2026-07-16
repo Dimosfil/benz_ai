@@ -55,3 +55,13 @@ test("expands the table view across the workspace", async () => {
   assert.match(app, /workspace\.classList\.toggle\("table-view", !mapActive\)/);
   assert.doesNotMatch(app, /tableWrap\.style\.width/);
 });
+
+test("pauses hidden map loading and restores its focus after returning from the table", async () => {
+  const app = await readFile(projectFile("./public/app.js"), "utf8");
+
+  assert.match(app, /else stationMap\.deactivate\(\)/);
+  assert.match(app, /requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{/);
+  assert.match(app, /if \(activeTab !== "map"\) return/);
+  assert.match(app, /stationMap\.activate\(focus\)/);
+  assert.match(app, /deferViewportLoad: mapPanel\.hidden/);
+});
