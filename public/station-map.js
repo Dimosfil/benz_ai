@@ -7,7 +7,7 @@ import {
   stationSources,
 } from "./station-view.js";
 import { filterStations } from "./station-filter.js";
-import { fetchJson } from "./api-client.js";
+import { fetchNdjson } from "./api-client.js";
 
 const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", "no_data"]);
 const STATUS_CHART_COLORS = Object.freeze({
@@ -72,7 +72,7 @@ export function stationViewportUrl({ south, north, west, east }) {
     minLon: Number(west).toFixed(6),
     maxLon: Number(east).toFixed(6),
   });
-  return `/api/stations?${params}`;
+  return `/api/stations/stream?${params}`;
 }
 
 export function padViewportBounds(bounds, ratio) {
@@ -343,6 +343,7 @@ export function createStationMap({ container, message, count }) {
   }
 
   function renderMarkers() {
+    const loading = arguments[0]?.loading === true;
     const filtered = filterStations(viewportStations, filters);
     const valid = filtered.filter(hasMapCoordinates);
     const nextKeys = new Set();
@@ -392,7 +393,7 @@ export function createStationMap({ container, message, count }) {
     }
     if (added.length) markers.addLayers(added);
     if (statusChanged.length && markers.refreshClusters) markers.refreshClusters(statusChanged);
-    updateVisibleCount();
+    updateVisibleCount({ loading });
     requestAnimationFrame(() => map.invalidateSize());
   }
 
@@ -444,12 +445,17 @@ export function createStationMap({ container, message, count }) {
     updateVisibleCount({ loading: true });
     if (!hasCachedStations) showMessage("Загружаем АЗС рядом с видимой областью…");
     try {
-      const responses = await Promise.all(requestBounds.map((bounds) => fetchJson(
+      await Promise.all(requestBounds.map((bounds) => fetchNdjson(
         stationViewportUrl(bounds),
         { signal: request.signal },
+        (data) => {
+          if (request.signal.aborted || sequence !== requestSequence) return;
+          mergeStations(Array.isArray(data.stations) ? data.stations : []);
+          if (stationCache.size) showMessage("");
+          renderMarkers({ loading: true });
+        },
       )));
       if (request.signal.aborted || sequence !== requestSequence) return;
-      mergeStations(responses.flatMap((data) => Array.isArray(data.stations) ? data.stations : []));
       loadedBounds = desiredBounds;
       pruneStationCache(retentionBounds);
       renderMarkers();

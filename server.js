@@ -23,6 +23,7 @@ export { normalizeFuelName } from "./domain/stations.js";
 
 const PUBLIC_DIR = join(process.cwd(), "public");
 const resultCache = new Map();
+const viewportStreamCache = new Map();
 const sberWorker = new SberBrowserWorker(config.sber);
 
 function json(res, status, body) {
@@ -209,8 +210,65 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   return { ...value, cached: false };
 }
 
+export async function streamProviderSnapshots(providerCalls, onSnapshot) {
+  const pending = new Map(providerCalls.map((call, index) => [
+    index,
+    Promise.resolve(call).then(
+      (value) => ({ index, value }),
+      (error) => ({ index, error }),
+    ),
+  ]));
+  const stations = [];
+  let completed = 0;
+
+  while (pending.size) {
+    const settled = await Promise.race(pending.values());
+    pending.delete(settled.index);
+    completed += 1;
+    if (Array.isArray(settled.value?.stations)) stations.push(...settled.value.stations);
+    await onSnapshot({
+      stations: mergeStations(stations),
+      completed,
+      total: providerCalls.length,
+      complete: pending.size === 0,
+    });
+  }
+}
+
+async function streamViewportStations(res, bbox) {
+  res.writeHead(200, {
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  });
+
+  const key = JSON.stringify(bbox);
+  const saved = readFreshCache(viewportStreamCache, key, config.resultCacheTtlMs);
+  if (saved) {
+    res.end(`${JSON.stringify({ stations: saved, completed: 1, total: 1, complete: true, cached: true })}\n`);
+    return;
+  }
+
+  const providerCalls = [
+    fetchTbank(bbox),
+    fetchAlfa(bbox),
+    fetchSber(sberWorker, bbox),
+    fetchBenzup(bbox),
+    fetchGdebenz(bbox),
+    fetchMultigo(bbox),
+  ].map((call) => withTimeout(call, config.viewportProviderTimeoutMs, "ожидание данных"));
+  let finalStations = [];
+  await streamProviderSnapshots(providerCalls, (snapshot) => {
+    finalStations = snapshot.stations;
+    if (!res.destroyed) res.write(`${JSON.stringify(snapshot)}\n`);
+  });
+  writeBoundedCache(viewportStreamCache, key, finalStations, config.resultCacheMaxEntries);
+  if (!res.destroyed) res.end();
+}
+
 function clearAllCaches() {
   resultCache.clear();
+  viewportStreamCache.clear();
   clearAlfaCache();
   clearGeocoderCache();
   clearYandexCache();
@@ -258,6 +316,9 @@ export function startServer(port = config.port, host = config.host) {
       if (requestUrl.pathname === "/api/stations") {
         const mode = requestUrl.searchParams.get("mode") === "viewport" ? "viewport" : "full";
         return json(res, 200, await searchStations(readBbox(requestUrl.searchParams), { mode }));
+      }
+      if (requestUrl.pathname === "/api/stations/stream") {
+        return await streamViewportStations(res, readBbox(requestUrl.searchParams));
       }
       if (requestUrl.pathname === "/api/health") return json(res, 200, {
         ok: true,
