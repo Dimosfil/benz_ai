@@ -32,39 +32,29 @@
       </section>
       </section>
       <section id="table-panel" class="tab-panel table-panel" role="tabpanel" aria-labelledby="table-tab" hidden>
-      <div class="table-toolbar" aria-label="Управление таблицей">
-        <div class="table-info"><span id="page-summary">Нет данных</span><span class="resize-hint">Размер: потяните правый нижний угол</span></div>
-        <div class="page-controls">
-          <label>Строк на странице <select id="page-size"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
-          <button id="table-reset-size" class="table-button reset-size" type="button" title="Вернуть стандартный размер таблицы">Сбросить размер</button>
-          <button id="page-prev" class="table-button" type="button" aria-label="Предыдущая страница">←</button>
-          <span id="page-number">1 / 1</span>
-          <button id="page-next" class="table-button" type="button" aria-label="Следующая страница">→</button>
+        <div class="table-section-tabs" role="tablist" aria-label="Разделы таблицы">
+          <button class="table-section-tab" type="button" role="tab" aria-selected="true" aria-controls="table-stations-panel" data-table-section="stations">АЗС</button>
+          <button class="table-section-tab" type="button" role="tab" aria-selected="false" aria-controls="table-sources-panel" data-table-section="sources" tabindex="-1">Источники</button>
+          <button class="table-section-tab" type="button" role="tab" aria-selected="false" aria-controls="table-availability-panel" data-table-section="availability" tabindex="-1">Доступность источников</button>
         </div>
-      </div>
-      <div class="table-wrap" tabindex="0" aria-label="Таблица автозаправочных станций. Размер изменяется за правый нижний угол" aria-live="polite">
-        <table class="station-table">
-          <thead><tr><th data-key="name" aria-sort="ascending"><button class="sort-button" type="button">АЗС <span>↑</span></button></th><th data-key="sources" aria-sort="none"><button class="sort-button" type="button">Источники <span>↕</span></button></th><th data-key="status" aria-sort="none"><button class="sort-button" type="button">Наличие <span>↕</span></button></th><th data-key="fuel" aria-sort="none"><button class="sort-button" type="button">Топливо <span>↕</span></button></th><th data-key="price" aria-sort="none"><button class="sort-button" type="button">Цены <span>↕</span></button></th><th data-key="fresh" aria-sort="none"><button class="sort-button" type="button">Свежесть <span>↕</span></button></th></tr></thead>
-          <tbody id="station-rows"></tbody>
-        </table>
-      </div>
-      <section id="results" class="results" aria-live="polite"></section>
-      <section id="summary-details" class="summary-details" hidden>
-        <div id="summary-cards" class="summary-cards"></div>
-        <div id="source-status" class="source-status" aria-label="Состояние источников"></div>
-        <div class="breakdown">
-          <section><h3>По видам топлива</h3><div id="fuel-summary"></div></section>
-        </div>
-      </section>
-      <section id="status-legend" class="status-legend" hidden>
-        <h3>Что означают статусы</h3>
-        <div class="legend-items">
-          <div class="legend-item"><span class="badge available">Вероятно есть</span><p>Источник сообщает о наличии, и известные данные ему не противоречат.</p></div>
-          <div class="legend-item"><span class="badge maybe_available">Возможно есть</span><p>Данные неопределённые, устаревшие либо источники или выбранные виды топлива расходятся.</p></div>
-          <div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div>
-          <div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div>
-        </div>
-      </section>
+        <section id="table-stations-panel" class="table-section-panel" role="tabpanel">
+          <div class="table-toolbar" aria-label="Управление таблицей">
+            <div class="table-info"><span id="page-summary">Нет данных</span><span class="resize-hint">Высота: потяните нижний край</span></div>
+            <div class="page-controls">
+              <label>Строк на странице <select id="page-size"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+              <button id="table-reset-size" class="table-button reset-size" type="button" title="Вернуть стандартный размер таблицы">Сбросить размер</button>
+              <button id="page-prev" class="table-button" type="button" aria-label="Предыдущая страница">←</button><span id="page-number">1 / 1</span><button id="page-next" class="table-button" type="button" aria-label="Следующая страница">→</button>
+            </div>
+          </div>
+          <div class="table-wrap" tabindex="0" aria-label="Таблица автозаправочных станций. Высота изменяется за нижний край" aria-live="polite">
+            <table class="station-table"><thead><tr><th data-key="name" aria-sort="ascending"><button class="sort-button" type="button">АЗС <span>↑</span></button></th><th data-key="sources" aria-sort="none"><button class="sort-button" type="button">Источники <span>↕</span></button></th><th data-key="status" aria-sort="none"><button class="sort-button" type="button">Наличие <span>↕</span></button></th><th data-key="fuel" aria-sort="none"><button class="sort-button" type="button">Топливо <span>↕</span></button></th><th data-key="price" aria-sort="none"><button class="sort-button" type="button">Цены <span>↕</span></button></th><th data-key="fresh" aria-sort="none"><button class="sort-button" type="button">Свежесть <span>↕</span></button></th></tr></thead><tbody id="station-rows"></tbody></table>
+          </div>
+          <section id="results" class="results" aria-live="polite"></section>
+          <section id="summary-details" class="summary-details" hidden><div id="summary-cards" class="summary-cards"></div><div class="breakdown"><section><h3>По видам топлива</h3><div id="fuel-summary"></div></section></div></section>
+          <section id="status-legend" class="status-legend" hidden><h3>Что означают статусы</h3><div class="legend-items"><div class="legend-item"><span class="badge available">Вероятно есть</span><p>Источник сообщает о наличии, и известные даные ему не противоречат.</p></div><div class="legend-item"><span class="badge maybe_available">Возможно есть</span><p>Данные неопределённые, устаревшие либо источники или выбранные виды топлива расходятся.</p></div><div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div><div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div></div></section>
+        </section>
+        <section id="table-sources-panel" class="table-section-panel" role="tabpanel" hidden><section id="table-sources" class="table-sources" aria-labelledby="table-sources-title" hidden><div class="table-sources-heading"><h3 id="table-sources-title">Источники данных</h3><p>Роли и метрики всех источников текущей сводки.</p></div><div id="table-source-list" class="table-source-list"></div></section></section>
+        <section id="table-availability-panel" class="table-section-panel" role="tabpanel" hidden><section id="source-availability" class="table-sources" aria-labelledby="source-availability-title" hidden><div class="table-sources-heading"><h3 id="source-availability-title">Доступность источников</h3><p>Ошибки здесь относятся только к последней загрузке.</p></div><div id="source-status" class="source-status" aria-label="Состояние источников"></div><div id="source-errors" class="source-error-list"></div></section></section>
       </section>
       </div>
       <aside class="search-sidebar" aria-label="Поиск и фильтры">

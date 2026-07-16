@@ -145,6 +145,7 @@ async function searchStations(bbox, { mode = "full" } = {}) {
         available: Boolean(tbank),
         configured: true,
         role: "availability",
+        returned: tbank?.stations.length || 0,
         error: providerFailureMessage(tbankResult, "T-Bank"),
       },
       alfa: {

@@ -42,3 +42,16 @@ test("activates and focuses the map for an explicit search", async () => {
   assert.match(app, /const mapFocus = matches\.length \? matches : allStations/);
   assert.match(app, /focus: mapFocus/);
 });
+
+test("expands the table view across the workspace", async () => {
+  const [css, app] = await Promise.all([
+    readFile(projectFile("./public/styles.css"), "utf8"),
+    readFile(projectFile("./public/app.js"), "utf8"),
+  ]);
+
+  assert.match(css, /\.workspace\.table-view\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(css, /\.workspace\.table-view \.search-sidebar\{display:none\}/);
+  assert.match(css, /\.table-wrap\{[^}]+width:100%!important/);
+  assert.match(app, /workspace\.classList\.toggle\("table-view", !mapActive\)/);
+  assert.doesNotMatch(app, /tableWrap\.style\.width/);
+});

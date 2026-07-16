@@ -13,6 +13,7 @@ import { COLUMN_KEYS, moveColumnOrder, normalizeColumnOrder } from "./table-orde
 import { filterStations, normalizeSelectedFuels } from "./station-filter.js";
 import { fetchJson } from "./api-client.js";
 import { createStationMap } from "./station-map.js";
+import { nonSourceWarnings, sourceOverviewRows } from "./source-overview.js";
 
 const locationInput = document.querySelector("#location");
 const fuel = document.querySelector("#fuel");
@@ -47,6 +48,12 @@ const mapTab = document.querySelector("#map-tab");
 const tableTab = document.querySelector("#table-tab");
 const mapPanel = document.querySelector("#map-panel");
 const tablePanel = document.querySelector("#table-panel");
+const tableSources = document.querySelector("#table-sources");
+const tableSourceList = document.querySelector("#table-source-list");
+const sourceAvailability = document.querySelector("#source-availability");
+const sourceErrors = document.querySelector("#source-errors");
+const tableSectionTabs = [...document.querySelectorAll(".table-section-tab")];
+const workspace = document.querySelector(".workspace");
 const stationMap = createStationMap({
   container: document.querySelector("#station-map"),
   message: document.querySelector("#map-message"),
@@ -75,8 +82,8 @@ function saveUIState() {
   saveTimer = null;
   try {
     const bounds = tableWrap.getBoundingClientRect();
-    if (bounds.width >= 480 && bounds.height >= 240) {
-      lastTableSize = { width: Math.round(bounds.width), height: Math.round(bounds.height) };
+    if (bounds.height >= 240) {
+      lastTableSize = { height: Math.round(bounds.height) };
     }
     localStorage.setItem(UI_STATE_KEY, JSON.stringify({
       location: locationInput.value,
@@ -132,11 +139,8 @@ function restoreUIState() {
   activeTab = saved.activeTab === "table" ? "table" : "map";
   if (saved.table && typeof saved.table === "object") {
     lastTableSize = {
-      width: Number(saved.table.width) || null,
       height: Number(saved.table.height) || null,
     };
-    const maxWidth = Math.max(480, window.innerWidth - tableWrap.getBoundingClientRect().left - 16);
-    if (Number(saved.table.width) >= 480) tableWrap.style.width = `${Math.min(Number(saved.table.width), maxWidth)}px`;
     if (Number(saved.table.height) >= 240) tableWrap.style.height = `${Math.min(Number(saved.table.height), window.innerHeight * 0.85)}px`;
     pendingTableScroll = {
       left: Math.max(0, Number(saved.table.scrollLeft) || 0),
@@ -150,6 +154,7 @@ function setActiveTab(tabName, { focusTab = false } = {}) {
   const mapActive = activeTab === "map";
   mapPanel.hidden = !mapActive;
   tablePanel.hidden = mapActive;
+  workspace.classList.toggle("table-view", !mapActive);
   mapTab.setAttribute("aria-selected", String(mapActive));
   tableTab.setAttribute("aria-selected", String(!mapActive));
   mapTab.tabIndex = mapActive ? 0 : -1;
@@ -163,6 +168,17 @@ function setActiveTab(tabName, { focusTab = false } = {}) {
     }
   });
   scheduleSaveUIState();
+}
+
+function setActiveTableSection(sectionName, { focusTab = false } = {}) {
+  const selected = tableSectionTabs.some((tab) => tab.dataset.tableSection === sectionName) ? sectionName : "stations";
+  tableSectionTabs.forEach((tab) => {
+    const active = tab.dataset.tableSection === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    document.querySelector(`#table-${tab.dataset.tableSection}-panel`).hidden = !active;
+    if (active && focusTab) tab.focus();
+  });
 }
 
 function applyColumnOrder() {
@@ -251,6 +267,36 @@ function metric(value, label) {
   return card;
 }
 
+function renderSourceOverview(data) {
+  const cards = sourceOverviewRows(data.sources, data.sourceRequests).map((source) => {
+    const card = document.createElement("article");
+    card.className = "table-source-card";
+    const header = document.createElement("div");
+    const name = document.createElement("h4");
+    const status = document.createElement("span");
+    name.textContent = source.name;
+    status.className = `source-state ${source.status.key}`;
+    status.textContent = source.status.label;
+    header.append(name, status);
+    const role = document.createElement("p");
+    role.className = "source-role";
+    role.textContent = source.role;
+    const metrics = document.createElement("p");
+    metrics.className = "source-metrics";
+    metrics.textContent = source.metrics.length ? source.metrics.join(" · ") : "Нет метрик запроса";
+    card.append(header, role, metrics);
+    if (source.error) {
+      const error = document.createElement("p");
+      error.className = "source-error";
+      error.textContent = source.error;
+      card.append(error);
+    }
+    return card;
+  });
+  tableSourceList.replaceChildren(...cards);
+  tableSources.hidden = false;
+}
+
 function renderSummary(data) {
   overview.hidden = false;
   summaryDetails.hidden = false;
@@ -273,6 +319,22 @@ function renderSummary(data) {
     return item;
   });
   document.querySelector("#source-status").replaceChildren(...sourceStatus);
+  const availabilityRows = sourceOverviewRows(data.sources, data.sourceRequests);
+  const errors = availabilityRows.filter((source) => source.error).map((source) => {
+    const item = document.createElement("p");
+    item.className = "source-availability-error";
+    item.textContent = `${source.name}: ${source.error}`;
+    return item;
+  });
+  if (!errors.length) {
+    const ok = document.createElement("p");
+    ok.className = "source-availability-ok";
+    ok.textContent = "В последней загрузке ошибок источников нет.";
+    errors.push(ok);
+  }
+  sourceErrors.replaceChildren(...errors);
+  sourceAvailability.hidden = false;
+  renderSourceOverview(data);
   const fuelRows = Object.entries(summary.fuels).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true })).map(([type, values]) => {
     const row = document.createElement("div");
     row.className = "fuel-row";
@@ -412,7 +474,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
       protectUserLocation,
       focus: mapFocus,
     });
-    const messages = [...(data.warnings || [])];
+    const messages = nonSourceWarnings(data.warnings, data.sources);
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
     notice.hidden = !messages.length;
     notice.textContent = messages.join(" ");
@@ -421,6 +483,8 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     overview.hidden = true;
     summaryDetails.hidden = true;
     statusLegend.hidden = true;
+    tableSources.hidden = true;
+    sourceAvailability.hidden = true;
     renderStations();
     notice.hidden = false;
     notice.textContent = error instanceof Error ? error.message : "Не удалось получить сводку.";
@@ -448,6 +512,18 @@ tableTab.addEventListener("click", () => setActiveTab("table"));
   const next = event.key === "ArrowLeft" || event.key === "Home" ? "map" : "table";
   setActiveTab(next, { focusTab: true });
 }));
+tableSectionTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => setActiveTableSection(tab.dataset.tableSection));
+  tab.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    let nextIndex = index;
+    if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tableSectionTabs.length - 1;
+    else nextIndex = (index + (event.key === "ArrowLeft" ? -1 : 1) + tableSectionTabs.length) % tableSectionTabs.length;
+    setActiveTableSection(tableSectionTabs[nextIndex].dataset.tableSection, { focusTab: true });
+  });
+});
 refreshButton.addEventListener("click", () => loadSummary({ refresh: true }));
 fuel.addEventListener("change", (event) => { updateFuelPicker(event.target); currentPage = 1; renderStations(); });
 status.addEventListener("change", (event) => { updateStatusPicker(event.target); currentPage = 1; renderStations(); });
@@ -493,7 +569,6 @@ headersByColumn.forEach((header) => {
   });
 });
 tableResetSize.addEventListener("click", () => {
-  tableWrap.style.removeProperty("width");
   tableWrap.style.removeProperty("height");
   scheduleSaveUIState();
 });
