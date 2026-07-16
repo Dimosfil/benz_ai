@@ -88,3 +88,17 @@ test("uses a text-only Leaflet attribution prefix", async () => {
 
   assert.match(source, /attributionControl\.setPrefix\('<a href="https:\/\/leafletjs\.com"[^>]*>Leaflet<\/a>'\)/);
 });
+
+test("viewport refresh reconciles markers without destroying an open popup", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+  const renderMarkers = source.match(/function renderMarkers\(\) \{([\s\S]*?)\n  \}\n\n  function cancelViewportLoad/)?.[1] || "";
+
+  assert.doesNotMatch(renderMarkers, /markers\.clearLayers\(\)/);
+  assert.match(renderMarkers, /markerCache\.get\(key\)/);
+  assert.match(renderMarkers, /markers\.removeLayer\(marker\)/);
+  assert.match(renderMarkers, /markers\.addLayers\(added\)/);
+  assert.match(source, /visible\.length \|\| !viewportStations\.length \|\| activePopupStationKey/);
+});

@@ -287,6 +287,7 @@ export function createStationMap({ container, message, count }) {
   map.setView([55.75, 37.62], 5);
   let viewportStations = [];
   const stationCache = new Map();
+  const markerCache = new Map();
   let loadedBounds = null;
   let filters = { fuels: [], statuses: [], text: "" };
   let loadTimer = null;
@@ -295,6 +296,7 @@ export function createStationMap({ container, message, count }) {
   let userLocated = false;
   let locatePending = null;
   let userLayer = null;
+  let activePopupStationKey = null;
 
   function showMessage(value) {
     message.textContent = value || "";
@@ -310,7 +312,11 @@ export function createStationMap({ container, message, count }) {
   function updateVisibleCount({ loading = false } = {}) {
     const visible = visibleFilteredStations();
     count.textContent = `${visible.length.toLocaleString("ru-RU")} АЗС${loading ? " · догружаем…" : ""}`;
-    if (!loading) showMessage(visible.length || !viewportStations.length ? "" : "По выбранным фильтрам на карте нет АЗС.");
+    if (!loading) showMessage(
+      visible.length || !viewportStations.length || activePopupStationKey
+        ? ""
+        : "По выбранным фильтрам на карте нет АЗС.",
+    );
     return visible.length;
   }
 
@@ -337,19 +343,55 @@ export function createStationMap({ container, message, count }) {
   }
 
   function renderMarkers() {
-    markers.clearLayers();
     const filtered = filterStations(viewportStations, filters);
     const valid = filtered.filter(hasMapCoordinates);
-    const layers = valid.map((station) => {
+    const nextKeys = new Set();
+    const added = [];
+    const statusChanged = [];
+
+    for (const station of valid) {
+      const key = stationCacheKey(station);
+      nextKeys.add(key);
       const status = stationMapStatus(station, filters.fuels);
-      return L.marker([Number(station.lat), Number(station.lon)], {
+      const existing = markerCache.get(key);
+      if (existing) {
+        if (existing.options.stationStatus !== status) {
+          existing.options.stationStatus = status;
+          existing.setIcon(markerIcon(L, status));
+          statusChanged.push(existing);
+        }
+        continue;
+      }
+
+      const marker = L.marker([Number(station.lat), Number(station.lon)], {
         icon: markerIcon(L, status),
         stationStatus: status,
+        stationKey: key,
         title: station.name || "АЗС",
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
-      }).bindPopup(() => popupFor(station, filters.fuels), { maxWidth: 410, minWidth: 300, className: "station-popup" });
-    });
-    markers.addLayers(layers);
+      }).bindPopup(
+        () => popupFor(stationCache.get(key) || station, filters.fuels),
+        { maxWidth: 410, minWidth: 300, className: "station-popup" },
+      );
+      marker.on("popupopen", () => {
+        activePopupStationKey = key;
+        showMessage("");
+      });
+      marker.on("popupclose", () => {
+        if (activePopupStationKey === key) activePopupStationKey = null;
+        updateVisibleCount();
+      });
+      markerCache.set(key, marker);
+      added.push(marker);
+    }
+
+    for (const [key, marker] of markerCache) {
+      if (nextKeys.has(key)) continue;
+      markers.removeLayer(marker);
+      markerCache.delete(key);
+    }
+    if (added.length) markers.addLayers(added);
+    if (statusChanged.length && markers.refreshClusters) markers.refreshClusters(statusChanged);
     updateVisibleCount();
     requestAnimationFrame(() => map.invalidateSize());
   }
@@ -370,6 +412,8 @@ export function createStationMap({ container, message, count }) {
       stationCache.clear();
       viewportStations = [];
       markers.clearLayers();
+      markerCache.clear();
+      activePopupStationKey = null;
       count.textContent = "0 АЗС";
       showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
       return;
@@ -478,6 +522,8 @@ export function createStationMap({ container, message, count }) {
     stationCache.clear();
     viewportStations = [];
     markers.clearLayers();
+    markerCache.clear();
+    activePopupStationKey = null;
     count.textContent = "0 АЗС";
     showMessage("");
   }
