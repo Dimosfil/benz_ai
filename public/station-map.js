@@ -128,11 +128,33 @@ function plainMapBounds(bounds) {
   };
 }
 
+function stationSourceIdentityKeys(station) {
+  return (station.sourceRefs || (station.source ? [{ source: station.source, externalId: station.externalId }] : []))
+    .filter((ref) => ref?.source && String(ref.externalId ?? ""))
+    .map((ref) => `source:${ref.source}:${String(ref.externalId)}`);
+}
+
 function stationCacheKey(station) {
+  const sourceKey = stationSourceIdentityKeys(station)[0];
+  if (sourceKey) return sourceKey;
   const latitude = Number(station.lat).toFixed(5);
   const longitude = Number(station.lon).toFixed(5);
   const name = String(station.name || "").trim().toLocaleLowerCase("ru-RU");
-  return `${latitude}:${longitude}:${name}`;
+  return `point:${latitude}:${longitude}:${name}`;
+}
+
+export function mergeStationCache(stationCache, identityIndex, stationKeys, stations) {
+  for (const station of stations) {
+    if (!hasMapCoordinates(station)) continue;
+    const identities = stationSourceIdentityKeys(station);
+    const existingKey = identities
+      .map((identity) => identityIndex.get(identity))
+      .find((key) => key && stationCache.has(key));
+    const key = existingKey || stationCacheKey(station);
+    stationCache.set(key, station);
+    stationKeys.set(station, key);
+    identities.forEach((identity) => identityIndex.set(identity, key));
+  }
 }
 
 function text(tag, value, className) {
@@ -287,6 +309,8 @@ export function createStationMap({ container, message, count }) {
   map.setView([55.75, 37.62], 5);
   let viewportStations = [];
   const stationCache = new Map();
+  const stationIdentityIndex = new Map();
+  const stationKeys = new WeakMap();
   const markerCache = new Map();
   let loadedBounds = null;
   let filters = { fuels: [], statuses: [], text: "" };
@@ -325,9 +349,7 @@ export function createStationMap({ container, message, count }) {
   }
 
   function mergeStations(stations) {
-    for (const station of stations) {
-      if (hasMapCoordinates(station)) stationCache.set(stationCacheKey(station), station);
-    }
+    mergeStationCache(stationCache, stationIdentityIndex, stationKeys, stations);
     syncStationCache();
   }
 
@@ -351,7 +373,7 @@ export function createStationMap({ container, message, count }) {
     const statusChanged = [];
 
     for (const station of valid) {
-      const key = stationCacheKey(station);
+      const key = stationKeys.get(station) || stationCacheKey(station);
       nextKeys.add(key);
       const status = stationMapStatus(station, filters.fuels);
       const existing = markerCache.get(key);
@@ -411,6 +433,7 @@ export function createStationMap({ container, message, count }) {
       activeRequest = null;
       loadedBounds = null;
       stationCache.clear();
+      stationIdentityIndex.clear();
       viewportStations = [];
       markers.clearLayers();
       markerCache.clear();
@@ -526,6 +549,7 @@ export function createStationMap({ container, message, count }) {
     requestSequence += 1;
     loadedBounds = null;
     stationCache.clear();
+    stationIdentityIndex.clear();
     viewportStations = [];
     markers.clearLayers();
     markerCache.clear();
@@ -561,6 +585,7 @@ export function createStationMap({ container, message, count }) {
     }
     loadedBounds = null;
     stationCache.clear();
+    stationIdentityIndex.clear();
     mergeStations(stations);
     if (deferViewportLoad) return;
     renderMarkers();

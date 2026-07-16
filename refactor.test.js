@@ -33,6 +33,21 @@ test("does not merge nearby records with different IDs from the same provider", 
   assert.equal(result.length, 2);
 });
 
+test("merges an orphan provider duplicate after another source confirms the station", () => {
+  const primary = station("tbank", "primary", 51.684624, 39.48504, "Интрансгаз");
+  const orphan = station("tbank", "orphan", 51.684589, 39.484893, "Интрансгаз");
+  const confirmation = station("multigo", "confirmed", 51.68462, 39.48502, "Интрансгаз");
+
+  const result = mergeStations([primary, orphan, confirmation]);
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].sourceRefs.map((ref) => `${ref.source}:${ref.externalId}`), [
+    "tbank:primary",
+    "multigo:confirmed",
+    "tbank:orphan",
+  ]);
+});
+
 test("merges exact co-located catalog duplicates and keeps fresh evidence", () => {
   const bank = station("tbank", "bank", 51.69258, 39.377016, "Газпром");
   bank.address = "Бабяково, Транспортная улица";

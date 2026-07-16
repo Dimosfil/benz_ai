@@ -3,12 +3,42 @@ import assert from "node:assert/strict";
 import {
   clusterStatusChart,
   hasMapCoordinates,
+  mergeStationCache,
   padViewportBounds,
   stationMapStatus,
   stationViewportUrl,
   stationWithinBounds,
   uncoveredViewportBounds,
 } from "./public/station-map.js";
+
+test("stream snapshots update one cached station when its preferred name changes", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  const first = {
+    name: "АЗС № 12",
+    lat: 51.6845,
+    lon: 39.4849,
+    sourceRefs: [{ source: "tbank", externalId: "station-12" }],
+  };
+  const enriched = {
+    ...first,
+    name: "Интрансгаз",
+    sourceRefs: [
+      ...first.sourceRefs,
+      { source: "multigo", externalId: "station-98" },
+    ],
+  };
+
+  mergeStationCache(cache, identityIndex, stationKeys, [first]);
+  const originalKey = stationKeys.get(first);
+  mergeStationCache(cache, identityIndex, stationKeys, [enriched]);
+
+  assert.equal(cache.size, 1);
+  assert.equal(stationKeys.get(enriched), originalKey);
+  assert.equal(cache.get(originalKey).name, "Интрансгаз");
+  assert.equal(identityIndex.get("source:multigo:station-98"), originalKey);
+});
 
 test("map cluster chart reflects the child station status distribution", () => {
   assert.equal(clusterStatusChart(["not_available", "not_available"]), "#ef4444");

@@ -124,6 +124,17 @@ function isSameStation(left, right) {
   return distance <= 40 || (distance <= 150 && leftName && leftName === stationNameKey(right.name));
 }
 
+function isCorroboratedOrphanDuplicate(left, right) {
+  if (!sharesProvider(left, right)) return false;
+  const leftSources = new Set(refsOf(left).map((ref) => ref.source));
+  const rightSources = new Set(refsOf(right).map((ref) => ref.source));
+  if (leftSources.size < 2 && rightSources.size < 2) return false;
+  if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
+  if (distanceMeters(left, right) > 40) return false;
+  const leftNames = new Set(namesOf(left).map(stationNameKey).filter(Boolean));
+  return namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
+}
+
 function aggregateStatuses(values) {
   const known = values.filter((value) => value && value !== "no_data");
   if (!known.length) return "no_data";
@@ -178,14 +189,7 @@ function recomputeAvailability(station) {
   return station;
 }
 
-export function mergeStations(stations) {
-  const merged = [];
-  for (const station of stations) {
-    const match = merged.find((candidate) => isSameStation(station, candidate));
-    if (!match) {
-      merged.push(structuredClone(station));
-      continue;
-    }
+function mergeStationInto(match, station) {
     const refs = [...refsOf(match), ...refsOf(station)];
     match.sourceRefs = [...new Map(refs.map((ref) => [refKey(ref), ref])).values()];
     match.addressAliases = [...new Set([...addressesOf(match), ...addressesOf(station)])];
@@ -196,6 +200,25 @@ export function mergeStations(stations) {
     match.availabilityBySource = mergeEvidenceBySource(match.availabilityBySource, station.availabilityBySource);
     match.yandexOrgId ||= station.yandexOrgId;
     match.priceUpdatedAt ||= station.priceUpdatedAt;
+}
+
+export function mergeStations(stations) {
+  const merged = [];
+  for (const station of stations) {
+    const match = merged.find((candidate) => isSameStation(station, candidate));
+    if (!match) {
+      merged.push(structuredClone(station));
+      continue;
+    }
+    mergeStationInto(match, station);
+  }
+
+  for (let left = 0; left < merged.length; left += 1) {
+    for (let right = merged.length - 1; right > left; right -= 1) {
+      if (!isCorroboratedOrphanDuplicate(merged[left], merged[right])) continue;
+      mergeStationInto(merged[left], merged[right]);
+      merged.splice(right, 1);
+    }
   }
   return merged.map(recomputeAvailability);
 }
