@@ -19,7 +19,8 @@ ENV HOME=/tmp
 
 WORKDIR /app
 
-COPY --chown=node:node package.json ./
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY --chown=node:node scripts/create-build-metadata.js /tmp/create-build-metadata.js
 COPY --chown=node:node .git/logs/HEAD /tmp/git-head-log
 RUN node /tmp/create-build-metadata.js /tmp/git-head-log /app/build-metadata.json \

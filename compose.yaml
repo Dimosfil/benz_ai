@@ -12,6 +12,10 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      DATABASE_URL: "${DATABASE_URL:-}"
+      DATABASE_SSL: "${DATABASE_SSL:-0}"
+      ANALYTICS_HASH_SALT: "${ANALYTICS_HASH_SALT:-}"
+      STATS_ADMIN_TOKEN: "${STATS_ADMIN_TOKEN:-}"
       CHROME_PATH: /usr/bin/chromium
       CHROME_NO_SANDBOX: "1"
       SBER_REFRESH_MS: "${SBER_REFRESH_MS:-60000}"

@@ -66,6 +66,25 @@ TELEGRAM_BOT_TOKEN=123456789:real-token-goes-here
 Повторный запуск неудавшегося коммита не увеличивает уже подготовленную версию
 ещё раз. Текущая версия хранится в `package.json` и показывается вместе с хешем.
 
+### Статистика посещений
+
+Сайт и Telegram-бот записывают обезличенные события в PostgreSQL, если заданы
+`DATABASE_URL` и `ANALYTICS_HASH_SALT`. Сырые IP-адреса, Telegram ID, имена и
+тексты поиска не сохраняются. Недоступность базы статистики не блокирует поиск
+АЗС или ответы бота.
+
+```dotenv
+DATABASE_URL=postgresql://user:password@host:5432/database
+DATABASE_SSL=0
+ANALYTICS_HASH_SALT=replace-with-a-long-random-secret
+STATS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
+```
+
+После запуска откройте `/admin.html` и введите `STATS_ADMIN_TOKEN`. Сводка за
+30 дней показывает просмотры и уникальных посетителей сайта, поиски, события
+веб-роботов, сообщения и уникальных пользователей Telegram-бота. Таблица и
+индексы с префиксом `benz_analytics_` создаются автоматически при подключении.
+
 ## Docker
 
 Образ включает Node.js 22 и Chromium для Sber browser-worker. Секреты в образ

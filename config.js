@@ -87,4 +87,10 @@ export const config = Object.freeze({
     longPollSeconds: 20,
     retryDelayMs: 3_000,
   }),
+  analytics: Object.freeze({
+    databaseUrl: process.env.DATABASE_URL || "",
+    hashSalt: process.env.ANALYTICS_HASH_SALT || "",
+    adminToken: process.env.STATS_ADMIN_TOKEN || "",
+    ssl: disabledByDefault(process.env.DATABASE_SSL),
+  }),
 });

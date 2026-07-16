@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +18,7 @@ import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, pa
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { TelegramPollingGateway } from "./services/telegram-gateway.js";
+import { AnalyticsService } from "./services/analytics.js";
 
 export { mergeStations, normalizeBenzupStation, normalizeSberStation, isYandexVerificationCandidate, parseYandexFuelPrices };
 export { normalizeFuelName } from "./domain/stations.js";
@@ -25,6 +27,25 @@ const PUBLIC_DIR = join(process.cwd(), "public");
 const resultCache = new Map();
 const viewportStreamCache = new Map();
 const sberWorker = new SberBrowserWorker(config.sber);
+
+function cookieValue(req, name) {
+  const match = String(req.headers.cookie || "").split(";").map((value) => value.trim()).find((value) => value.startsWith(`${name}=`));
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return null;
+  }
+}
+
+function webVisitor(req) {
+  return cookieValue(req, "benz_vid") || `${req.socket.remoteAddress || "unknown"}|${req.headers["user-agent"] || "unknown"}`;
+}
+
+function bearerToken(req) {
+  const match = String(req.headers.authorization || "").match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
 
 function json(res, status, body) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -289,26 +310,37 @@ async function summaryFor(query) {
 }
 
 export function startServer(port = config.port, host = config.host) {
-  const telegramGateway = new TelegramPollingGateway(createBenzTelegramHandler({
+  const analytics = new AnalyticsService(config.analytics);
+  void analytics.start();
+  const botHandler = createBenzTelegramHandler({
     buildInfo,
     findSummary: summaryFor,
     refreshSummary: async (query) => {
       clearAllCaches();
       return summaryFor(query);
     },
-  }), { ...config.telegram, ...TELEGRAM_BOT_PROFILE });
+  });
+  const telegramGateway = new TelegramPollingGateway(async (message) => {
+    void analytics.recordTelegram(message);
+    return botHandler(message);
+  }, { ...config.telegram, ...TELEGRAM_BOT_PROFILE });
   if (config.telegram.enabled && !telegramGateway.isConfigured()) {
     throw new Error("TELEGRAM_POLLING_ENABLED=true requires a valid TELEGRAM_BOT_TOKEN.");
   }
   const server = createServer(async (req, res) => {
     const requestUrl = new URL(req.url, `http://${req.headers.host}`);
     try {
-      if (requestUrl.pathname === "/api/summary") return json(res, 200, await summaryFor(requestUrl.searchParams.get("q")));
+      if (requestUrl.pathname === "/api/summary") {
+        const body = await summaryFor(requestUrl.searchParams.get("q"));
+        void analytics.recordWeb("search", webVisitor(req), req.headers["user-agent"]);
+        return json(res, 200, body);
+      }
       if (requestUrl.pathname === "/api/cache/refresh") {
         if (req.method !== "POST") return json(res, 405, { error: "Используйте POST" });
         clearAllCaches();
         const startedAt = Date.now();
         const body = await summaryFor(requestUrl.searchParams.get("q"));
+        void analytics.recordWeb("search", webVisitor(req), req.headers["user-agent"]);
         return json(res, 200, {
           ...body,
           cacheRefresh: { refreshed: true, completedAt: new Date().toISOString(), durationMs: Date.now() - startedAt },
@@ -326,13 +358,32 @@ export function startServer(port = config.port, host = config.host) {
         build: buildInfo,
         sberWorker: sberWorker.status(),
         telegram: telegramGateway.status(),
+        analytics: analytics.status(),
       });
+      if (requestUrl.pathname === "/api/admin/stats") {
+        if (req.method !== "GET") return json(res, 405, { error: "Method Not Allowed" });
+        if (!analytics.isAdminToken(bearerToken(req))) return json(res, 401, { error: "Unauthorized" });
+        try {
+          return json(res, 200, await analytics.stats());
+        } catch {
+          return json(res, 503, { error: "Analytics database is unavailable" });
+        }
+      }
 
       const requested = requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname;
       const file = normalize(resolve(PUBLIC_DIR, `.${requested}`));
       if (file !== PUBLIC_DIR && !file.startsWith(`${PUBLIC_DIR}${sep}`)) return json(res, 403, { error: "Forbidden" });
       const content = await readFile(file);
-      res.writeHead(200, { "Content-Type": mime[extname(file)] || "application/octet-stream" });
+      const headers = { "Content-Type": mime[extname(file)] || "application/octet-stream" };
+      if (requested === "/index.html") {
+        let visitorId = cookieValue(req, "benz_vid");
+        if (!visitorId) {
+          visitorId = randomUUID();
+          headers["Set-Cookie"] = `benz_vid=${encodeURIComponent(visitorId)}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax`;
+        }
+        void analytics.recordWeb("page_view", visitorId, req.headers["user-agent"]);
+      }
+      res.writeHead(200, headers);
       res.end(content);
     } catch (error) {
       if (error.code === "ENOENT") return json(res, 404, { error: "Не найдено" });
@@ -345,6 +396,7 @@ export function startServer(port = config.port, host = config.host) {
   server.on("close", () => {
     telegramGateway.stop().catch(() => {});
     sberWorker.close().catch(() => {});
+    analytics.close().catch(() => {});
   });
   return server;
 }

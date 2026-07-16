@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Статистика — Benz AI</title>
+    <link rel="stylesheet" href="/admin.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div><p class="eyebrow">Benz AI</p><h1>Статистика посещений</h1></div>
+        <a href="/">На сайт</a>
+      </header>
+      <form id="login-form">
+        <label for="token">Токен статистики</label>
+        <div><input id="token" type="password" autocomplete="current-password" required><button type="submit">Показать</button></div>
+        <p>Токен хранится только в текущей вкладке браузера.</p>
+      </form>
+      <p id="message" role="status"></p>
+      <section id="dashboard" hidden>
+        <div id="cards" class="cards"></div>
+        <section class="panel"><h2>Последние 30 дней</h2><div class="table-wrap"><table><thead><tr><th>Дата</th><th>Просмотры</th><th>Посетители</th><th>Поиски</th><th>Сообщения боту</th><th>Пользователи бота</th></tr></thead><tbody id="daily"></tbody></table></div></section>
+      </section>
+    </main>
+    <script type="module" src="/admin.js"></script>
+  </body>
+</html>

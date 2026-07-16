@@ -11,6 +11,7 @@
 | Map UI | Leaflet 1.9.4 and Leaflet.markercluster 1.5.3 loaded from pinned CDN URLs; browser Geolocation API; bounded viewport bbox loading; OpenStreetMap tiles | `public/index.html`, `public/station-map.js`, `server.js` |
 | Browser integration | Headless Chrome/Edge via Chrome DevTools Protocol | `providers/sber-browser.js` |
 | Telegram interface | Telegram Bot API long polling over built-in Fetch API | `services/telegram-gateway.js`, `services/telegram-bot.js` |
+| Analytics storage | PostgreSQL through `pg`; privacy-preserving event hashes and aggregate admin reporting | `services/analytics.js`, `tools/project-memory/specs/analytics.md` |
 | Package manager | npm | `package.json` |
 | Tests | Node.js test runner | `npm test` |
 | Build | Docker/Compose produces the release OCI image | `Dockerfile`, `compose.yaml`, `tools/AGENT_RUNBOOK.md` |
@@ -31,6 +32,7 @@
 | Multigo | Nearby fuel-category place catalog | POST request with 60-second cache; does not assert fuel availability |
 | Telegram Bot API | Secondary client interface for the shared fuel-search workflow | Optional server-side bot token and long polling |
 | DeepSeek | Prepared server-side AI adapter for future bot workflows | Optional API key; not called by current search |
+| PostgreSQL | Optional persistent web and Telegram usage analytics | Private `DATABASE_URL`; idempotent application-managed schema |
 
 ## Commands
 
