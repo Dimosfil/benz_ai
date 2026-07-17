@@ -394,7 +394,7 @@ export function createStationMap({ container, message, count }) {
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
       }).bindPopup(
         () => popupFor(stationCache.get(key) || station, filters.fuels),
-        { maxWidth: 410, minWidth: 300, className: "station-popup" },
+        { autoPan: false, maxWidth: 410, minWidth: 300, className: "station-popup" },
       );
       marker.on("popupopen", () => {
         activePopupStationKey = key;
