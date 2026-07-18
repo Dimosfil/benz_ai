@@ -22,7 +22,17 @@ export function bumpPackageVersion(packagePath = resolve("package.json")) {
   const previous = packageFromHead();
   if (!previous || current.version === previous.version) current.version = nextPatchVersion(current.version);
   writeFileSync(packagePath, `${JSON.stringify(current, null, 2)}\n`, "utf8");
-  execFileSync("git", ["add", "--", packagePath], { stdio: "inherit" });
+  const lockPath = resolve("package-lock.json");
+  try {
+    const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+    lock.version = current.version;
+    if (lock.packages?.[""]) lock.packages[""].version = current.version;
+    writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+    execFileSync("git", ["add", "--", packagePath, lockPath], { stdio: "inherit" });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    execFileSync("git", ["add", "--", packagePath], { stdio: "inherit" });
+  }
   return current.version;
 }
 

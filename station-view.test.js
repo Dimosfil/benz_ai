@@ -6,6 +6,7 @@ import {
   stationFreshText,
   stationFuelEntries,
   stationLastPaymentAt,
+  minimumPrice,
 } from "./public/station-view.js";
 
 test("station fuel entries combine availability and prices", () => {
@@ -19,6 +20,11 @@ test("station fuel entries combine availability and prices", () => {
     { type: "95", status: "no_data", price: 68.5 },
     { type: "DT", status: "not_available", price: null },
   ]);
+});
+
+test("minimum price ignores invalid and nonpositive values", () => {
+  assert.equal(minimumPrice({ prices: { 92: { value: 0 }, 95: { value: -1 }, DT: { value: 71.5 } } }), 71.5);
+  assert.equal(minimumPrice({ prices: { 92: { value: "bad" } } }), null);
 });
 
 test("station confidence reports agreement between known source signals", () => {

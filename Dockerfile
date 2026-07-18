@@ -3,8 +3,7 @@ FROM node:22-bookworm-slim
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
-    CHROME_PATH=/usr/bin/chromium \
-    CHROME_NO_SANDBOX=1
+    CHROME_PATH=/usr/bin/chromium
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates chromium fonts-liberation \
@@ -21,10 +20,6 @@ WORKDIR /app
 
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY --chown=node:node scripts/create-build-metadata.js /tmp/create-build-metadata.js
-COPY --chown=node:node .git/logs/HEAD /tmp/git-head-log
-RUN node /tmp/create-build-metadata.js /tmp/git-head-log /app/build-metadata.json \
-    && rm -f /tmp/create-build-metadata.js /tmp/git-head-log
 COPY --chown=node:node server.js config.js build-info.js ./
 COPY --chown=node:node domain ./domain
 COPY --chown=node:node providers ./providers

@@ -20,12 +20,20 @@ export const config = Object.freeze({
   resultCacheMaxEntries: positiveInteger(process.env.RESULT_CACHE_MAX_ENTRIES, 32),
   providerAreaCacheMaxEntries: positiveInteger(process.env.PROVIDER_AREA_CACHE_MAX_ENTRIES, 64),
   viewportProviderTimeoutMs: positiveInteger(process.env.VIEWPORT_PROVIDER_TIMEOUT_MS, 12_000),
+  requestRateLimit: Object.freeze({
+    windowMs: positiveInteger(process.env.REQUEST_RATE_WINDOW_MS, 60_000),
+    readsPerWindow: positiveInteger(process.env.REQUEST_RATE_READS, 90),
+    refreshesPerWindow: positiveInteger(process.env.REQUEST_RATE_REFRESHES, 3),
+    maxClients: positiveInteger(process.env.REQUEST_RATE_MAX_CLIENTS, 10_000),
+  }),
   sourceUserAgent: process.env.SOURCE_USER_AGENT || "BenzAI/0.1 local fuel aggregator",
   geocoder: Object.freeze({
     url: process.env.GEOCODER_API_URL || "https://nominatim.openstreetmap.org/search",
     userAgent: process.env.GEOCODER_USER_AGENT || "BenzAI/0.1 local fuel search",
     cacheTtlMs: 24 * 60 * 60_000,
     timeoutMs: 15_000,
+    cacheMaxEntries: positiveInteger(process.env.GEOCODER_CACHE_MAX_ENTRIES, 1000),
+    queueMax: positiveInteger(process.env.GEOCODER_QUEUE_MAX, 100),
   }),
   tbank: Object.freeze({
     url: process.env.TBANK_API_URL || "https://toplivo.tbank.ru/api/v1/stations",
@@ -35,6 +43,7 @@ export const config = Object.freeze({
     maxSplitDepth: 4,
   }),
   alfa: Object.freeze({
+    enabled: enabledByDefault(process.env.ENABLE_ALFA_AZS),
     url: process.env.ALFA_AZS_API_URL || "https://alfabank.ru/api/v1/azs-stations/public/stations",
     pageUrl: process.env.ALFA_AZS_PAGE_URL || "https://alfabank.ru/",
     userAgent: process.env.ALFA_AZS_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138 Safari/537.36",
@@ -46,6 +55,7 @@ export const config = Object.freeze({
     url: process.env.BENZUP_API_URL || "https://api.omt-consult.ru/v2/stations",
     token: process.env.BENZUP_API_TOKEN || "",
     timeoutMs: 30_000,
+    cacheTtlMs: positiveInteger(process.env.BENZUP_CACHE_TTL_MS, 5 * 60_000),
   }),
   sber: Object.freeze({
     refreshMs: positiveInteger(process.env.SBER_REFRESH_MS, 60_000),
@@ -92,5 +102,6 @@ export const config = Object.freeze({
     hashSalt: process.env.ANALYTICS_HASH_SALT || "",
     adminToken: process.env.STATS_ADMIN_TOKEN || "",
     ssl: disabledByDefault(process.env.DATABASE_SSL),
+    sslRejectUnauthorized: !disabledByDefault(process.env.DATABASE_SSL_INSECURE),
   }),
 });

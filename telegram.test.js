@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createBenzTelegramHandler, formatTelegramSummary } from "./services/telegram-bot.js";
-import { isValidTelegramToken, TelegramPollingGateway } from "./services/telegram-gateway.js";
+import { isValidTelegramToken, TelegramPollingGateway, telegramMessageChunks } from "./services/telegram-gateway.js";
 
 test("validates Telegram bot tokens without exposing them", () => {
   assert.equal(isValidTelegramToken("123456789:abcdefghijklmnopqrstuvwxyz"), true);
@@ -85,6 +85,36 @@ test("normalizes a Telegram update and sends the business response", async () =>
   });
   assert.equal(gateway.status().processedUpdates, 1);
   assert.ok(gateway.status().lastUpdateAt);
+});
+
+test("does not advance the Telegram offset when processing fails", async () => {
+  const gateway = new TelegramPollingGateway(async () => { throw new Error("failed"); }, {
+    token: "123456789:abcdefghijklmnopqrstuvwxyz",
+    fetchImpl: async () => Response.json({
+      ok: true,
+      result: [{ update_id: 10, message: { chat: { id: 42 }, text: "Казань" } }],
+    }),
+  });
+  await assert.rejects(gateway.pollOnce(), /failed/);
+  assert.equal(gateway.offset, 0);
+});
+
+test("rejects a malformed Telegram update id without corrupting the offset", async () => {
+  const gateway = new TelegramPollingGateway(async () => null, {
+    token: "123456789:abcdefghijklmnopqrstuvwxyz",
+    fetchImpl: async () => Response.json({ ok: true, result: [{ message: { chat: { id: 42 }, text: "Казань" } }] }),
+  });
+  await assert.rejects(gateway.pollOnce(), /update_id/);
+  assert.equal(gateway.offset, 0);
+});
+
+test("splits long Telegram responses without breaking Unicode symbols", () => {
+  const chunks = telegramMessageChunks(`Начало\n${"⛽".repeat(5000)}\nКонец`);
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every((chunk) => [...chunk].length <= 4096));
+  assert.equal(chunks.join("").replace(/\n/g, ""), `Начало${"⛽".repeat(5000)}Конец`);
+  const family = "👨‍👩‍👧‍👦";
+  assert.deepEqual(telegramMessageChunks(family.repeat(3), 2), [family.repeat(2), family]);
 });
 
 test("formats the fuel summary without turning it into a factual guarantee", () => {

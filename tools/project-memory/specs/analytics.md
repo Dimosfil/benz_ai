@@ -31,5 +31,8 @@ never make fuel search or bot responses unavailable.
 - Missing configuration disables analytics without affecting the product.
 - Database initialization creates only the prefixed `benz_analytics_events`
   table and indexes with idempotent DDL.
+- TLS certificate verification remains enabled whenever `DATABASE_SSL=1`.
+  `DATABASE_SSL_INSECURE=1` is an explicit compatibility escape hatch for a
+  trusted server with a self-signed certificate.
 - Database failures are reported in health status without credentials, and
   event writes fail closed without interrupting the user request.

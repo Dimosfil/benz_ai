@@ -29,6 +29,7 @@ const HELP_TEXT = [
 ].join("\n\n");
 
 export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary, buildInfo = null }) {
+  const lastRefreshByUser = new Map();
   return async function handleTelegramMessage(message) {
     const text = String(message?.text || "").trim();
     if (!text) return null;
@@ -41,6 +42,11 @@ export function createBenzTelegramHandler({ findSummary, refreshSummary = findSu
     if (refreshMatch) {
       const query = refreshMatch[1]?.trim();
       if (!query) return "Укажите город или регион после команды, например: /refresh Новая Усмань";
+      const userKey = String(message?.userId || message?.chatId || "unknown");
+      const lastRefreshAt = lastRefreshByUser.get(userKey) || 0;
+      if (Date.now() - lastRefreshAt < 60_000) return "Обновлять весь кэш можно не чаще одного раза в минуту. Повторите позже.";
+      lastRefreshByUser.set(userKey, Date.now());
+      while (lastRefreshByUser.size > 10_000) lastRefreshByUser.delete(lastRefreshByUser.keys().next().value);
       try {
         return formatTelegramSummary(await refreshSummary(query));
       } catch (error) {

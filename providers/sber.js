@@ -1,4 +1,4 @@
-import { normalizeFuelName } from "../domain/stations.js";
+import { inBbox, normalizeFuelName } from "../domain/stations.js";
 
 function normalizeStatus(value) {
   return ({ available: "available", stale: "maybe_available", unknown: "no_data" })[value] || "no_data";
@@ -44,12 +44,18 @@ export function normalizeSberStation(station) {
 export async function fetchSber(worker, bbox) {
   const data = await worker.getStations(bbox);
   if (!Array.isArray(data.stations)) throw new Error("Sber AZS вернул неизвестный формат ответа");
+  const normalized = data.stations.map(normalizeSberStation);
+  const valid = normalized.filter((station) => station.externalId && Number.isFinite(station.lat) && Number.isFinite(station.lon));
+  const stations = valid.filter((station) => inBbox(station, bbox));
   return {
-    stations: data.stations.map(normalizeSberStation),
+    stations,
     available: true,
     configured: true,
     fetchedAt: data.fetchedAt,
     version: data.version || null,
     worker: worker.status(),
+    returned: data.stations.length,
+    invalid: normalized.length - valid.length,
+    droppedOutside: valid.length - stations.length,
   };
 }

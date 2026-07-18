@@ -1,9 +1,18 @@
 import { config } from "../config.js";
+import { inBbox, normalizeFuelName } from "../domain/stations.js";
+
+function normalizeStatus(value) {
+  return new Set(["available", "maybe_available", "not_available", "no_data"]).has(value) ? value : "no_data";
+}
 
 export function normalizeTbankStation(station) {
   const externalId = String(station.id ?? "");
-  const fuelStatus = station.statusByFuelType && typeof station.statusByFuelType === "object" ? station.statusByFuelType : {};
-  const overallStatus = station.status || "no_data";
+  const rawFuelStatus = station.statusByFuelType && typeof station.statusByFuelType === "object" ? station.statusByFuelType : {};
+  const fuelStatus = Object.fromEntries(Object.entries(rawFuelStatus)
+    .filter(([fuel]) => String(fuel || "").trim())
+    .map(([fuel, status]) => [normalizeFuelName(fuel), normalizeStatus(status)])
+  );
+  const overallStatus = normalizeStatus(station.status);
   return {
     source: "tbank",
     sourceRefs: [{ source: "tbank", externalId }],
@@ -24,10 +33,15 @@ export function normalizeTbankStation(station) {
   };
 }
 
-async function fetchPage(bbox) {
+function requestSignal(signal) {
+  const timeout = AbortSignal.timeout(config.tbank.timeoutMs);
+  return signal && typeof AbortSignal.any === "function" ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+async function fetchPage(bbox, signal) {
   const url = new URL(config.tbank.url);
   url.search = new URLSearchParams(Object.entries(bbox).map(([key, value]) => [key, String(value)])).toString();
-  const response = await fetch(url, { signal: AbortSignal.timeout(config.tbank.timeoutMs), headers: { Accept: "application/json" } });
+  const response = await fetch(url, { signal: requestSignal(signal), headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`T-Bank вернул HTTP ${response.status}`);
   const data = await response.json();
   if (data.status !== "ok" || !Array.isArray(data.payload)) throw new Error("Неожиданный ответ T-Bank");
@@ -45,7 +59,7 @@ function splitBbox(bbox) {
   ];
 }
 
-export async function fetchTbank(bbox) {
+export async function fetchTbank(bbox, { signal } = {}) {
   let requests = 0;
   let truncated = false;
   async function visit(part, depth) {
@@ -54,17 +68,22 @@ export async function fetchTbank(bbox) {
       return [];
     }
     requests += 1;
-    const stations = await fetchPage(part);
+    const stations = await fetchPage(part, signal);
     if (stations.length < config.tbank.pageLimit) return stations;
     if (depth >= config.tbank.maxSplitDepth) {
       truncated = true;
       return stations;
     }
     const nested = [];
-    for (const child of splitBbox(part)) nested.push(...await visit(child, depth + 1));
+    for (const child of splitBbox(part)) {
+      if (signal?.aborted) throw signal.reason || new Error("T-Bank request aborted");
+      nested.push(...await visit(child, depth + 1));
+    }
     return nested;
   }
-  const stations = await visit(bbox, 0);
+  const stations = (await visit(bbox, 0)).filter((station) => (
+    station.externalId && Number.isFinite(station.lat) && Number.isFinite(station.lon) && inBbox(station, bbox)
+  ));
   return {
     stations: [...new Map(stations.map((station) => [station.externalId, station])).values()],
     truncated,

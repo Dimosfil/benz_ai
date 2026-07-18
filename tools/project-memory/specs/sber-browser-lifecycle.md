@@ -19,6 +19,13 @@ starts a new verified browser session. This saves container RAM without
 changing the search result or treating Sber data as available before a browser
 JSON response succeeds.
 
+Startup failures and unexpected Chromium exits also close the CDP socket and
+remove the temporary profile. Application shutdown waits for worker cleanup
+before the CLI process exits. Chromium sandboxing stays enabled unless an
+operator explicitly sets `CHROME_NO_SANDBOX=1` for a compatible environment.
+The bundled Compose file does so because the browser is already non-root inside
+a read-only container with `no-new-privileges`; ordinary host execution does not.
+
 ## Observability
 
 `GET /api/health` exposes only safe worker metadata: lifecycle, active area and

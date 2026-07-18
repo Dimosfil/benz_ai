@@ -94,8 +94,10 @@ export class TelegramPollingGateway {
     this.lastPollAt = new Date().toISOString();
 
     for (const update of updates) {
-      this.offset = Number(update.update_id) + 1;
+      const updateId = Number(update?.update_id);
+      if (!Number.isSafeInteger(updateId) || updateId < 0) throw new Error("Telegram вернул update без корректного update_id");
       await this.handleUpdate(update);
+      this.offset = updateId + 1;
     }
   }
 
@@ -108,14 +110,17 @@ export class TelegramPollingGateway {
       username: message.from?.username ?? message.from?.first_name ?? null,
       text: message.text,
     });
+    if (responseText) {
+      for (const chunk of telegramMessageChunks(responseText)) {
+        await this.call("sendMessage", {
+          chat_id: String(message.chat.id),
+          text: chunk,
+          disable_web_page_preview: true,
+        }, AbortSignal.timeout(20_000));
+      }
+    }
     this.lastUpdateAt = new Date().toISOString();
     this.processedUpdates += 1;
-    if (!responseText) return;
-    await this.call("sendMessage", {
-      chat_id: String(message.chat.id),
-      text: String(responseText).slice(0, 4096),
-      disable_web_page_preview: true,
-    }, AbortSignal.timeout(20_000));
   }
 
   async pollLoop() {
@@ -144,6 +149,31 @@ export class TelegramPollingGateway {
     }
     return body.result;
   }
+}
+
+export function telegramMessageChunks(value, limit = 4096) {
+  const chunkLimit = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 4096) : 4096;
+  const text = String(value || "");
+  const symbols = typeof Intl.Segmenter === "function"
+    ? [...new Intl.Segmenter("ru", { granularity: "grapheme" }).segment(text)].map((item) => item.segment)
+    : [...text];
+  const chunks = [];
+  while (symbols.length) {
+    if (symbols.length <= chunkLimit) {
+      chunks.push(symbols.splice(0).join(""));
+      break;
+    }
+    let end = chunkLimit;
+    for (let index = chunkLimit - 1; index >= Math.floor(chunkLimit * 0.6); index -= 1) {
+      if (symbols[index] === "\n") {
+        end = index + 1;
+        break;
+      }
+    }
+    chunks.push(symbols.splice(0, end).join("").trimEnd());
+    while (symbols[0] === "\n") symbols.shift();
+  }
+  return chunks.filter(Boolean);
 }
 
 function delay(ms) {

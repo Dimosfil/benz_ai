@@ -8,7 +8,7 @@ export function normalizeSelectedFuels(selected, available) {
 export function filterStations(stations, { fuels = [], statuses = [], text = "" } = {}) {
   const query = text.trim().toLocaleLowerCase("ru-RU");
   return stations.filter((station) => {
-    const hasSelectedFuel = !fuels.length || fuels.some((type) => station.fuelStatus[type]);
+    const hasSelectedFuel = !fuels.length || fuels.some((type) => station.fuelStatus?.[type] || station.prices?.[type]);
     const actualStatus = selectionStatus(station, fuels);
     const matchesStatus = !statuses.length || statuses.includes(actualStatus);
     const searchableText = [station.name, station.address, ...(station.nameAliases || []), ...(station.addressAliases || [])].join(" ");

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru">
-  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Benz AI — поиск топлива</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"><link rel="stylesheet" href="/styles.css"></head>
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Benz AI — поиск топлива</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" integrity="sha256-YU3qCpj/P06tdPBJGPax0bm6Q1wltfwjsho5TR4+TYc=" crossorigin=""><link rel="stylesheet" href="/styles.css"></head>
   <body>
     <main class="app-shell">
       <header class="app-header">
@@ -51,7 +51,7 @@
           </div>
           <section id="results" class="results" aria-live="polite"></section>
           <section id="summary-details" class="summary-details" hidden><div id="summary-cards" class="summary-cards"></div><div class="breakdown"><section><h3>По видам топлива</h3><div id="fuel-summary"></div></section></div></section>
-          <section id="status-legend" class="status-legend" hidden><h3>Что означают статусы</h3><div class="legend-items"><div class="legend-item"><span class="badge available">Вероятно есть</span><p>Источник сообщает о наличии, и известные даные ему не противоречат.</p></div><div class="legend-item"><span class="badge maybe_available">Возможно есть</span><p>Данные неопределённые, устаревшие либо источники или выбранные виды топлива расходятся.</p></div><div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div><div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div></div></section>
+          <section id="status-legend" class="status-legend" hidden><h3>Что означают статусы</h3><div class="legend-items"><div class="legend-item"><span class="badge available">Вероятно есть</span><p>Не менее двух источников сообщают о наличии, и известные данные им не противоречат.</p></div><div class="legend-item"><span class="badge maybe_available">Возможно есть</span><p>Данные неопределённые, устаревшие либо источники или выбранные виды топлива расходятся.</p></div><div class="legend-item"><span class="badge not_available">Вероятно нет</span><p>Источник сообщает, что топливо недоступно.</p></div><div class="legend-item"><span class="badge no_data">Нет данных</span><p>Источник не передал сведений о наличии.</p></div></div></section>
         </section>
         <section id="table-sources-panel" class="table-section-panel" role="tabpanel" hidden><section id="table-sources" class="table-sources" aria-labelledby="table-sources-title" hidden><div class="table-sources-heading"><h3 id="table-sources-title">Источники данных</h3><p>Роли и метрики всех источников текущей сводки.</p></div><div id="table-source-list" class="table-source-list"></div></section></section>
         <section id="table-availability-panel" class="table-section-panel" role="tabpanel" hidden><section id="source-availability" class="table-sources" aria-labelledby="source-availability-title" hidden><div class="table-sources-heading"><h3 id="source-availability-title">Доступность источников</h3><p>Ошибки здесь относятся только к последней загрузке.</p></div><div id="source-status" class="source-status" aria-label="Состояние источников"></div><div id="source-errors" class="source-error-list"></div></section></section>
@@ -73,7 +73,7 @@
     </main>
     <template id="station"><article class="station"><div><p class="source"></p><h2></h2><p class="address"></p><p class="detail"></p><a class="station-link" target="_blank" rel="noreferrer" hidden>Открыть карту</a></div><div class="right"><span class="badge"></span><p class="fuel"></p><p class="prices"></p><p class="fresh"></p></div></article></template>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin=""></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

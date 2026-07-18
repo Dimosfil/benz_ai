@@ -31,27 +31,40 @@ export function parseYandexFuelPrices(rawHtml) {
 }
 
 export function isYandexVerificationCandidate(station) {
-  return station.overallStatus === "available" && Boolean(station.yandexOrgId);
+  const hasPositiveSignal = Object.values(station.availabilityBySource || {}).some((evidence) => (
+    evidence?.overallStatus === "available"
+    || Object.values(evidence?.fuelStatus || {}).includes("available")
+  ));
+  return Boolean(station.yandexOrgId) && (station.overallStatus === "available" || hasPositiveSignal);
 }
 
 async function checkStation(station) {
   const saved = readFreshCache(cache, station.yandexOrgId, config.yandex.cacheTtlMs);
-  if (saved) return { ...station, ...saved };
+  if (saved) return applyYandexResult(station, saved);
   const response = await fetch(`https://yandex.ru/maps/org/${station.yandexOrgId}/`, {
     signal: AbortSignal.timeout(config.yandex.timeoutMs),
     headers: { "User-Agent": "Mozilla/5.0 BenzAI/0.1", "Accept-Language": "ru-RU,ru;q=0.9" },
   });
   if (!response.ok) throw new Error(`Яндекс Карты вернули HTTP ${response.status}`);
   const parsed = parseYandexFuelPrices(await response.text());
-  const refs = [...(station.sourceRefs || []), { source: "yandex", externalId: station.yandexOrgId }];
   const value = {
-    prices: { ...station.prices, ...parsed.prices },
+    prices: parsed.prices,
     priceUpdatedAt: parsed.updatedAt,
-    sourceRefs: [...new Map(refs.map((ref) => [`${ref.source}:${ref.externalId}`, ref])).values()],
     yandexCheckedAt: new Date().toISOString(),
   };
   writeBoundedCache(cache, station.yandexOrgId, value, config.yandex.cacheMaxEntries);
-  return { ...station, ...value };
+  return applyYandexResult(station, value);
+}
+
+function applyYandexResult(station, value) {
+  const refs = [...(station.sourceRefs || []), { source: "yandex", externalId: station.yandexOrgId }];
+  return {
+    ...station,
+    ...value,
+    prices: { ...(station.prices || {}), ...(value.prices || {}) },
+    priceUpdatedAt: value.priceUpdatedAt || station.priceUpdatedAt || null,
+    sourceRefs: [...new Map(refs.map((ref) => [`${ref.source}:${ref.externalId}`, ref])).values()],
+  };
 }
 
 export async function enrichYandexPrices(stations) {
@@ -78,7 +91,7 @@ export async function enrichYandexPrices(stations) {
   }
   await Promise.all(Array.from({ length: Math.min(config.yandex.concurrency, candidates.length) }, worker));
   const warnings = [];
-  if (eligible.length > candidates.length) warnings.push(`Яндекс проверен только для первых ${candidates.length} АЗС со статусом «Вероятно есть».`);
+  if (eligible.length > candidates.length) warnings.push(`Яндекс проверен только для первых ${candidates.length} АЗС с положительным сигналом наличия.`);
   if (errors.length) warnings.push(`Не удалось проверить Яндекс для ${errors.length} АЗС.`);
   return {
     stations: output,

@@ -61,7 +61,12 @@ class CdpClient {
     if (typeof WebSocket !== "function") throw new Error("Для Sber browser worker требуется Node.js 22+");
     this.socket = new WebSocket(this.url);
     this.socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch {
+        this.close();
+        return;
+      }
       if (!message.id || !this.pending.has(message.id)) return;
       const pending = this.pending.get(message.id);
       this.pending.delete(message.id);
@@ -69,14 +74,24 @@ class CdpClient {
       if (message.error) pending.reject(new Error(message.error.message));
       else pending.resolve(message.result);
     };
+    this.socket.onclose = () => this.rejectPending("Chrome DevTools отключён");
     await new Promise((resolve, reject) => {
-      this.socket.onopen = resolve;
-      this.socket.onerror = () => reject(new Error("Не удалось подключиться к Chrome DevTools"));
+      const timer = setTimeout(() => {
+        this.close();
+        reject(new Error("Превышено время подключения к Chrome DevTools"));
+      }, 5_000);
+      timer.unref?.();
+      this.socket.onopen = () => { clearTimeout(timer); resolve(); };
+      this.socket.onerror = () => { clearTimeout(timer); reject(new Error("Не удалось подключиться к Chrome DevTools")); };
     });
   }
 
   send(method, params = {}, timeoutMs = CDP_COMMAND_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        reject(new Error("Chrome DevTools не подключён"));
+        return;
+      }
       const id = ++this.nextId;
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -96,9 +111,13 @@ class CdpClient {
 
   close() {
     try { this.socket?.close(); } catch {}
+    this.rejectPending("Chrome DevTools закрыт");
+  }
+
+  rejectPending(message) {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new Error("Chrome DevTools закрыт"));
+      pending.reject(new Error(message));
     }
     this.pending.clear();
   }
@@ -138,9 +157,10 @@ export class SberBrowserWorker {
   async ensureStarted() {
     if (this.closePromise) await this.closePromise;
     if (this.cdp) return;
-    if (!this.startPromise) this.startPromise = this.start().catch((error) => {
-      this.startPromise = null;
+    if (!this.startPromise) this.startPromise = this.start().catch(async (error) => {
       this.lastError = error;
+      await this.stop("start_failed").catch(() => {});
+      this.startPromise = null;
       throw error;
     });
     await this.startPromise;
@@ -155,11 +175,15 @@ export class SberBrowserWorker {
       windowsHide: true,
     });
     this.chrome = chrome;
+    const profileDir = this.profileDir;
     chrome.once("exit", () => {
       if (this.chrome !== chrome) return;
       this.cdp?.close();
       this.cdp = null;
+      this.chrome = null;
       this.startPromise = null;
+      if (this.profileDir === profileDir) this.profileDir = null;
+      rm(profileDir, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 }).catch(() => {});
       if (!this.stopping) this.recordStop("browser_exit");
     });
 
@@ -181,9 +205,13 @@ export class SberBrowserWorker {
     let page = targets.find((target) => target.type === "page");
     if (!page && browserWebSocketPath) {
       const browserCdp = new CdpClient(`ws://127.0.0.1:${port}${browserWebSocketPath}`);
-      await browserCdp.connect();
-      const { targetId } = await browserCdp.send("Target.createTarget", { url: "about:blank", background: true });
-      browserCdp.close();
+      let targetId;
+      try {
+        await browserCdp.connect();
+        ({ targetId } = await browserCdp.send("Target.createTarget", { url: "about:blank", background: true }));
+      } finally {
+        browserCdp.close();
+      }
       targets = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(5_000) }).then((response) => response.json());
       page = targets.find((target) => target.id === targetId);
     }

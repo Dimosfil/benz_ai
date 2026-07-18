@@ -26,12 +26,14 @@ function isElectricOnly(station) {
 
 export function selectMultigoStations(rows, bbox) {
   const normalized = rows.map((raw) => ({ raw, station: normalizeMultigoStation(raw) }));
-  const inside = normalized.filter(({ station }) => inBbox(station, bbox));
+  const valid = normalized.filter(({ station }) => station.externalId && Number.isFinite(station.lat) && Number.isFinite(station.lon));
+  const inside = valid.filter(({ station }) => inBbox(station, bbox));
   const stations = inside.filter(({ raw }) => !isElectricOnly(raw)).map(({ station }) => station);
   return {
     stations,
     returned: normalized.length,
-    droppedOutside: normalized.length - inside.length,
+    invalid: normalized.length - valid.length,
+    droppedOutside: valid.length - inside.length,
     droppedElectric: inside.length - stations.length,
   };
 }
@@ -68,7 +70,7 @@ export function normalizeMultigoStation(station) {
   };
 }
 
-export async function fetchMultigo(bbox) {
+export async function fetchMultigo(bbox, { signal } = {}) {
   const { lat, lon } = centerOf(bbox);
   const key = [bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon].map((value) => value.toFixed(4)).join(",");
   const saved = readFreshCache(cache, key, config.multigo.cacheTtlMs);
@@ -76,7 +78,9 @@ export async function fetchMultigo(bbox) {
 
   const response = await fetch(config.multigo.url, {
     method: "POST",
-    signal: AbortSignal.timeout(config.multigo.timeoutMs),
+    signal: signal && typeof AbortSignal.any === "function"
+      ? AbortSignal.any([signal, AbortSignal.timeout(config.multigo.timeoutMs)])
+      : AbortSignal.timeout(config.multigo.timeoutMs),
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
@@ -92,6 +96,7 @@ export async function fetchMultigo(bbox) {
     ...selected,
     available: true,
     limit: config.multigo.limit,
+    truncated: selected.returned >= config.multigo.limit,
   };
   writeBoundedCache(cache, key, value, config.providerAreaCacheMaxEntries);
   return { ...value, cached: false };

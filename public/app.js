@@ -233,7 +233,10 @@ function sortValue(station, key, selectedFuel) {
   if (key === "status") return ({ available: 1, maybe_available: 2, no_data: 3, not_available: 4 })[selectionStatus(station, selectedFuel)] || 5;
   if (key === "fuel") return stationFuelText(station, selectedFuel);
   if (key === "price") return minimumPrice(station);
-  if (key === "fresh") return station.lastTransactionAt ? Date.parse(station.lastTransactionAt) : null;
+  if (key === "fresh") {
+    const timestamp = Date.parse(station.lastTransactionAt);
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
   return "";
 }
 
@@ -361,8 +364,8 @@ function renderBuildInfo(build) {
   const parsed = build.committedAt ? new Date(build.committedAt) : null;
   const date = parsed && Number.isFinite(parsed.getTime())
     ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(parsed)
-    : "дата неизвестна";
-  const parts = [software, knownCommit, knownCommit ? `коммит ${date}` : ""].filter(Boolean);
+    : "";
+  const parts = [software, knownCommit, knownCommit && date ? `коммит ${date}` : ""].filter(Boolean);
   buildInfoNode.textContent = `Версия ${parts.join(" · ")}`;
   buildInfoNode.title = knownCommit ? build.commit : "";
 }
@@ -482,6 +485,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     notice.textContent = messages.join(" ");
   } catch (error) {
     allStations = [];
+    stationMap.clear();
     overview.hidden = true;
     summaryDetails.hidden = true;
     statusLegend.hidden = true;

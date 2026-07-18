@@ -59,15 +59,17 @@ TELEGRAM_BOT_TOKEN=123456789:real-token-goes-here
 примеры поиска города, района города, района области и населённого пункта с
 уточнением региона.
 Сайт и ответы бота показывают короткий хеш и дату текущего коммита. При локальном
-запуске метаданные читаются из Git. Docker-сборка автоматически запекает их из
-`.git/logs/HEAD`; `GIT_COMMIT_SHA` и `GIT_COMMIT_DATE` остаются доступными как
-приоритетное переопределение для CI.
+запуске метаданные читаются из Git. Docker-образ не копирует историю репозитория:
+передайте `GIT_COMMIT_SHA` и `GIT_COMMIT_DATE` как build args (Compose читает их
+из одноимённых переменных окружения). Если они не заданы, интерфейс корректно
+скрывает неизвестные Git-метаданные.
 
 Каждый новый коммит автоматически увеличивает patch-версию приложения через
 отслеживаемый `.githooks/pre-commit` и `scripts/bump-version.js`. Один раз после
 клонирования включите проектные hooks командой `git config core.hooksPath .githooks`.
 Повторный запуск неудавшегося коммита не увеличивает уже подготовленную версию
-ещё раз. Текущая версия хранится в `package.json` и показывается вместе с хешем.
+ещё раз. Текущая версия синхронно хранится в `package.json` и `package-lock.json`
+и показывается вместе с хешем.
 
 ### Статистика посещений
 
@@ -79,6 +81,8 @@ TELEGRAM_BOT_TOKEN=123456789:real-token-goes-here
 ```dotenv
 DATABASE_URL=postgresql://user:password@host:5432/database
 DATABASE_SSL=0
+# Только для сервера с заведомо самоподписанным сертификатом:
+DATABASE_SSL_INSECURE=0
 ANALYTICS_HASH_SALT=replace-with-a-long-random-secret
 STATS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
 ```
@@ -96,6 +100,8 @@ STATS_ADMIN_TOKEN=replace-with-a-long-random-admin-token
 в runtime.
 
 ```powershell
+$env:GIT_COMMIT_SHA = (git rev-parse HEAD)
+$env:GIT_COMMIT_DATE = (git show -s --format=%cI HEAD)
 docker compose build
 docker compose up -d
 docker compose ps
@@ -122,7 +128,8 @@ Chromium находится в container tmpfs и исчезает при ост
   Endpoint возвращает общероссийский снимок, поэтому приложение кэширует его на
   60 секунд и самостоятельно оставляет точки внутри найденной территории.
   Защитная HTTP-проверка завершается лёгкой серверной cookie-сессией без запуска
-  дополнительного Chromium.
+  дополнительного Chromium. Установите `ENABLE_ALFA_AZS=0`, чтобы полностью
+  отключить запросы к источнику.
 - **BenzUp** — лицензируемый источник каталога АЗС и цен. Включается через
   `BENZUP_API_TOKEN`; адрес API по умолчанию —
   `https://api.omt-consult.ru/v2/stations`.
@@ -159,6 +166,7 @@ Chromium находится в container tmpfs и исчезает при ост
 ```powershell
 $env:BENZUP_API_TOKEN = "<полученный Bearer token>"
 $env:DEEPSEEK_API_KEY = "<серверный API-ключ>" # только для функций, которые явно используют providers/deepseek.js
+$env:ENABLE_ALFA_AZS = "0" # необязательно: полностью отключает Alfa AZS
 $env:ENABLE_YANDEX_PRICES = "0" # необязательно: отключает Яндекс Карты
 $env:YANDEX_PRICE_LIMIT = "30" # необязательно: ограничивает число проверок
 $env:CHROME_PATH = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
@@ -177,6 +185,13 @@ npm start
 стандартную папку. Для browser-worker требуется Node.js 22 или новее. Worker
 создаётся по первому поиску, обслуживает до 10 активных областей, удаляет
 неактивные через 15 минут и очищает временный профиль при штатной остановке.
+`CHROME_NO_SANDBOX=1` является ослаблением защиты и не используется при обычном
+локальном запуске. Штатный Compose включает его явно, потому что Chromium уже
+работает непривилегированно в read-only контейнере с `no-new-privileges`, которое
+несовместимо с setuid sandbox. Публичные HTTP-запросы ограничиваются параметрами `REQUEST_RATE_*`;
+для `/api/cache/refresh` действует отдельный более строгий лимит. Очередь Nominatim
+дополнительно ограничена `GEOCODER_QUEUE_MAX`, чтобы входящие запросы не могли
+создать неограниченный backlog при обязательной паузе между геокодированиями.
 
 Для публичного размещения задайте идентифицирующий User-Agent с контактами:
 

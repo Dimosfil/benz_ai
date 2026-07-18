@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeStations } from "./domain/stations.js";
+import { mergeStations, summarizeStations } from "./domain/stations.js";
 import { selectMultigoStations } from "./providers/multigo.js";
 import { filterStations, normalizeSelectedFuels } from "./public/station-filter.js";
 import { moveColumnOrder, normalizeColumnOrder } from "./public/table-order.js";
@@ -79,9 +79,9 @@ test("merges exact co-located catalog duplicates and keeps fresh evidence", () =
     "sber:petrol",
     "gdebenz:report",
   ]);
-  assert.equal(result[0].overallStatus, "available");
+  assert.equal(result[0].overallStatus, "maybe_available");
   assert.equal(result[0].name, "Газпромнефть");
-  assert.equal(result[0].fuelStatus["92"], "available");
+  assert.equal(result[0].fuelStatus["92"], "maybe_available");
   assert.equal(result[0].fuelStatus.CNG, "no_data");
   assert.equal(result[0].availabilityBySource.gdebenz.confirmations, 3);
 });
@@ -108,6 +108,45 @@ test("still merges records for the same station from different providers", () =>
   assert.equal(stationSources(result[0]), "T‑Bank Fuel + Multigo");
 });
 
+test("does not merge different neighbouring stations from separate providers", () => {
+  const first = station("tbank", "one", 55, 37, "АЗС А");
+  first.address = "Северная сторона трассы";
+  const second = station("alfa", "two", 55.00025, 37, "АЗС Б");
+  second.address = "Южная сторона трассы";
+  const result = mergeStations([first, second]);
+  assert.equal(result.length, 2);
+});
+
+test("downgrades a lone positive source before building the summary", () => {
+  const only = station("tbank", "one", 55, 37, "АЗС");
+  only.availabilityBySource = { tbank: { overallStatus: "available", fuelStatus: { 92: "available" } } };
+  const [merged] = mergeStations([only]);
+  assert.equal(merged.overallStatus, "maybe_available");
+  assert.equal(summarizeStations([merged]).statuses.maybe_available, 1);
+});
+
+test("keeps a price paired with the newest publication time", () => {
+  const old = station("benzup", "old", 55, 37, "АЗС");
+  old.prices = { 92: { value: 50, currency: "RUB", source: "benzup" } };
+  old.priceUpdatedAt = "2026-07-01T10:00:00Z";
+  const fresh = station("alfa", "fresh", 55, 37, "АЗС");
+  fresh.prices = { 92: { value: 60, currency: "RUB", source: "alfa" } };
+  fresh.priceUpdatedAt = "2026-07-02T10:00:00Z";
+  const [merged] = mergeStations([old, fresh]);
+  assert.equal(merged.prices["92"].value, 60);
+  assert.equal(merged.priceUpdatedAt, fresh.priceUpdatedAt);
+});
+
+test("summary ignores impossible future freshness and nonpositive prices", () => {
+  const item = station("tbank", "future", 55, 37, "АЗС");
+  item.lastTransactionAt = "2999-01-01T00:00:00Z";
+  item.prices = { 92: { value: 0 } };
+  const summary = summarizeStations([item]);
+  assert.equal(summary.freshness.withTimestamp, 0);
+  assert.equal(summary.freshness.latestAt, null);
+  assert.equal(summary.withPrices, 0);
+});
+
 test("keeps only Multigo fuel places inside the requested territory", () => {
   const bbox = { minLat: 51.5, maxLat: 51.7, minLon: 39.1, maxLon: 39.3 };
   const result = selectMultigoStations([
@@ -130,6 +169,12 @@ test("treats selecting every fuel as an unrestricted filter", () => {
   ];
   assert.equal(filterStations(stations, { fuels: [] }).length, 2);
   assert.equal(filterStations(stations, { fuels: ["92"] }).length, 1);
+});
+
+test("fuel filter includes a station that has only a published price", () => {
+  const priceOnly = station("benzup", "price", 55, 37, "АЗС");
+  priceOnly.prices = { 95: { value: 70, currency: "RUB", source: "benzup" } };
+  assert.equal(filterStations([priceOnly], { fuels: ["95"] }).length, 1);
 });
 
 test("normalizes and moves persisted table columns", () => {

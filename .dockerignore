@@ -1,7 +1,4 @@
-.git/*
-!.git/logs/
-.git/logs/*
-!.git/logs/HEAD
+.git
 .gitignore
 .env
 .env.*

@@ -66,10 +66,11 @@ function stationNameKey(value) {
 }
 
 function stationAddressKey(value) {
-  return String(value || "")
+  const normalized = String(value || "")
     .toLocaleLowerCase("ru-RU")
     .replace(/^россия\s*,?\s*/u, "")
     .replace(/[^a-zа-я0-9]/giu, "");
+  return new Set(["", "адрес", "адреснеуказан"]).has(normalized) ? "" : normalized;
 }
 
 function addressesOf(station) {
@@ -120,8 +121,15 @@ function isSameStation(left, right) {
   if (sharesProvider(left, right)) return isCoLocatedDuplicate(left, right);
   if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
   const distance = distanceMeters(left, right);
-  const leftName = stationNameKey(left.name);
-  return distance <= 40 || (distance <= 150 && leftName && leftName === stationNameKey(right.name));
+  const leftNames = new Set(namesOf(left).map(stationNameKey).filter(Boolean));
+  const sameName = namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
+  const leftAddresses = new Set(addressesOf(left).map(stationAddressKey).filter(Boolean));
+  const sameAddress = addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+  // Provider coordinates commonly differ by a few metres. Beyond that tolerance,
+  // require identity evidence so neighbouring stations are not silently merged.
+  return distance <= 15
+    || (distance <= 40 && (sameName || sameAddress))
+    || (distance <= 150 && sameName && sameAddress);
 }
 
 function isCorroboratedOrphanDuplicate(left, right) {
@@ -142,6 +150,12 @@ function aggregateStatuses(values) {
   return unique.size === 1 ? known[0] : "maybe_available";
 }
 
+function reliableAggregateStatus(values) {
+  const known = values.filter((value) => value && value !== "no_data");
+  const status = aggregateStatuses(known);
+  return status === "available" && known.length < 2 ? "maybe_available" : status;
+}
+
 function latestObservedAt(values) {
   const timestamps = values.filter((value) => Number.isFinite(Date.parse(value)));
   return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
@@ -154,13 +168,22 @@ function maximumNumber(values) {
 
 function mergeEvidence(left = {}, right = {}) {
   const fuels = new Set([...Object.keys(left.fuelStatus || {}), ...Object.keys(right.fuelStatus || {})]);
+  const leftTime = Date.parse(left.observedAt);
+  const rightTime = Date.parse(right.observedAt);
+  const hasChronology = Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime;
+  const newer = hasChronology && leftTime > rightTime ? left : right;
+  const older = newer === right ? left : right;
   return {
-    ...left,
-    ...right,
-    overallStatus: aggregateStatuses([left.overallStatus, right.overallStatus]),
+    ...(hasChronology ? older : left),
+    ...(hasChronology ? newer : right),
+    overallStatus: hasChronology
+      ? newer.overallStatus || older.overallStatus || "no_data"
+      : aggregateStatuses([left.overallStatus, right.overallStatus]),
     fuelStatus: Object.fromEntries([...fuels].map((fuel) => [
       fuel,
-      aggregateStatuses([left.fuelStatus?.[fuel], right.fuelStatus?.[fuel]].filter(Boolean)),
+      hasChronology
+        ? newer.fuelStatus?.[fuel] || older.fuelStatus?.[fuel] || "no_data"
+        : aggregateStatuses([left.fuelStatus?.[fuel], right.fuelStatus?.[fuel]].filter(Boolean)),
     ])),
     observedAt: latestObservedAt([left.observedAt, right.observedAt]),
     operationsCount: maximumNumber([left.operationsCount, right.operationsCount]),
@@ -176,11 +199,11 @@ function mergeEvidenceBySource(left = {}, right = {}) {
 
 function recomputeAvailability(station) {
   const evidence = Object.values(station.availabilityBySource || {});
-  station.overallStatus = aggregateStatuses(evidence.map((item) => item.overallStatus));
+  station.overallStatus = reliableAggregateStatus(evidence.map((item) => item.overallStatus));
   const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})));
   station.fuelStatus = Object.fromEntries([...fuels].map((fuel) => [
     fuel,
-    aggregateStatuses(evidence.map((item) => item.fuelStatus?.[fuel]).filter(Boolean)),
+    reliableAggregateStatus(evidence.map((item) => item.fuelStatus?.[fuel]).filter(Boolean)),
   ]));
   const observed = evidence.map((item) => item.observedAt).filter((value) => Number.isFinite(Date.parse(value)));
   station.lastTransactionAt = observed.length
@@ -195,11 +218,19 @@ function mergeStationInto(match, station) {
     match.addressAliases = [...new Set([...addressesOf(match), ...addressesOf(station)])];
     match.nameAliases = [...new Set([...namesOf(match), ...namesOf(station)])];
     match.name = preferredStationName(match.nameAliases) || match.name;
-    match.prices = { ...(match.prices || {}), ...(station.prices || {}) };
+    const matchPriceTime = Date.parse(match.priceUpdatedAt);
+    const stationPriceTime = Date.parse(station.priceUpdatedAt);
+    const incomingPrices = station.prices || {};
+    const hasIncomingPrices = Object.keys(incomingPrices).length > 0;
+    const incomingIsNewer = hasIncomingPrices && Number.isFinite(stationPriceTime)
+      && (!Number.isFinite(matchPriceTime) || stationPriceTime >= matchPriceTime);
+    match.prices = incomingIsNewer
+      ? { ...(match.prices || {}), ...incomingPrices }
+      : { ...incomingPrices, ...(match.prices || {}) };
     match.links = { ...(match.links || {}), ...(station.links || {}) };
     match.availabilityBySource = mergeEvidenceBySource(match.availabilityBySource, station.availabilityBySource);
     match.yandexOrgId ||= station.yandexOrgId;
-    match.priceUpdatedAt ||= station.priceUpdatedAt;
+    if (hasIncomingPrices && (incomingIsNewer || !match.priceUpdatedAt)) match.priceUpdatedAt = station.priceUpdatedAt || match.priceUpdatedAt;
 }
 
 export function mergeStations(stations) {
@@ -228,6 +259,7 @@ export function summarizeStations(stations) {
   const fuels = {};
   const brands = new Map();
   const timestamps = [];
+  const now = Date.now();
   let withPrices = 0;
   for (const station of stations) {
     statuses[station.overallStatus] = (statuses[station.overallStatus] || 0) + 1;
@@ -236,15 +268,15 @@ export function summarizeStations(stations) {
       fuels[fuel][status] = (fuels[fuel][status] || 0) + 1;
       fuels[fuel].total += 1;
     }
-    const brandKey = station.name.trim().toLocaleLowerCase("ru-RU");
-    const brand = brands.get(brandKey) || { name: station.name.trim(), count: 0 };
+    const displayName = String(station.name || "АЗС").trim() || "АЗС";
+    const brandKey = displayName.toLocaleLowerCase("ru-RU");
+    const brand = brands.get(brandKey) || { name: displayName, count: 0 };
     brand.count += 1;
     brands.set(brandKey, brand);
     const timestamp = Date.parse(station.lastTransactionAt);
-    if (Number.isFinite(timestamp)) timestamps.push(timestamp);
-    if (Object.keys(station.prices || {}).length) withPrices += 1;
+    if (Number.isFinite(timestamp) && timestamp <= now + 5 * 60_000) timestamps.push(timestamp);
+    if (Object.values(station.prices || {}).some((price) => Number.isFinite(Number(price?.value)) && Number(price.value) > 0)) withPrices += 1;
   }
-  const now = Date.now();
   return {
     total: stations.length,
     statuses,
@@ -253,8 +285,8 @@ export function summarizeStations(stations) {
     withPrices,
     freshness: {
       withTimestamp: timestamps.length,
-      recent24h: timestamps.filter((value) => now - value <= 24 * 60 * 60_000).length,
-      recent72h: timestamps.filter((value) => now - value <= 72 * 60 * 60_000).length,
+      recent24h: timestamps.filter((value) => value <= now + 5 * 60_000 && now - value <= 24 * 60 * 60_000).length,
+      recent72h: timestamps.filter((value) => value <= now + 5 * 60_000 && now - value <= 72 * 60 * 60_000).length,
       latestAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
     },
   };

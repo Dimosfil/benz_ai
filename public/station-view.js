@@ -15,7 +15,7 @@ export const sourceNames = Object.freeze({
   yandex: "Яндекс Карты",
 });
 
-const fuelNames = Object.freeze({ DT: "ДТ", LPG: "Пропан", CNG: "Метан" });
+const fuelNames = Object.freeze({ DT: "ДТ", LPG: "Пропан", CNG: "Метан", OTHER: "Другое" });
 const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
 const RELIABLE_AVAILABILITY_MIN_SIGNALS = 2;
 const RELIABLE_AVAILABILITY_MIN_AGREEMENT = 80;
@@ -78,7 +78,8 @@ export function stationFuelText(station, selected = []) {
 
 export function stationPriceText(station) {
   return Object.entries(station.prices || {}).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
-    .map(([type, price]) => `${fuelName(type)} — ${Number(price.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`)
+    .filter(([, price]) => Number.isFinite(Number(price?.value)) && Number(price.value) > 0)
+    .map(([type, price]) => `${fuelName(type)} — ${formatPrice(price.value, price.currency)}`)
     .join(" · ") || "Цены не опубликованы";
 }
 
@@ -92,9 +93,20 @@ export function stationFuelEntries(station, selected = []) {
       type,
       name: fuelName(type),
       status: selectionStatus(station, [type]),
-      price: Number.isFinite(price) ? price : null,
+      price: Number.isFinite(price) && price > 0 ? price : null,
+      currency: station.prices?.[type]?.currency || "RUB",
     };
   });
+}
+
+export function formatPrice(value, currency = "RUB") {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "—";
+  try {
+    return new Intl.NumberFormat("ru-RU", { style: "currency", currency: String(currency || "RUB").toUpperCase() }).format(number);
+  } catch {
+    return `${number.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || "RUB"}`;
+  }
 }
 
 export function stationConfidence(station, selected = []) {
@@ -106,7 +118,7 @@ export function stationLastPaymentAt(station) {
   const timestamps = Object.entries(station.availabilityBySource || {})
     .filter(([source]) => PAYMENT_SOURCES.has(source))
     .map(([, signal]) => signal.observedAt)
-    .filter((value) => Number.isFinite(Date.parse(value)));
+    .filter((value) => Number.isFinite(Date.parse(value)) && Date.parse(value) <= Date.now() + 5 * 60_000);
   return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
 }
 
@@ -119,6 +131,6 @@ export function stationFreshText(station) {
 }
 
 export function minimumPrice(station) {
-  const prices = Object.values(station.prices || {}).map((price) => Number(price.value)).filter(Number.isFinite);
+  const prices = Object.values(station.prices || {}).map((price) => Number(price.value)).filter((value) => Number.isFinite(value) && value > 0);
   return prices.length ? Math.min(...prices) : null;
 }

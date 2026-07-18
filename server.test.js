@@ -1,9 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { normalizeGdebenzStation } from "./providers/gdebenz.js";
 import { normalizeMultigoStation } from "./providers/multigo.js";
 import { chromeArguments, SberBrowserWorker } from "./providers/sber-browser.js";
-import { isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices, withTimeout } from "./server.js";
+import { clearYandexCache, enrichYandexPrices } from "./providers/yandex.js";
+import { alfaProviderCall, isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices, readBbox, startServer, withTimeout } from "./server.js";
+
+test("does not call Alfa when the provider is disabled", async () => {
+  let called = false;
+  const result = await alfaProviderCall({}, async () => {
+    called = true;
+    return { stations: [] };
+  }, false);
+
+  assert.equal(called, false);
+  assert.equal(result, null);
+});
 
 test("starts the Sber Chromium worker without a GUI", () => {
   const args = chromeArguments("C:\\Temp\\benz-ai-sber-test");
@@ -51,10 +64,41 @@ test("reports a safe stopped Sber worker lifecycle", () => {
 });
 
 test("bounds a slow viewport provider call", async () => {
+  let aborted = false;
   await assert.rejects(
-    withTimeout(new Promise(() => {}), 5, "ожидание данных"),
+    withTimeout(new Promise(() => {}), 5, "ожидание данных", () => { aborted = true; }),
     /превышено время ожидания/,
   );
+  assert.equal(aborted, true);
+});
+
+test("requires a complete bbox inside geographic ranges", () => {
+  assert.throws(() => readBbox(new URLSearchParams("minLat=1&maxLat=2&minLon=3")), /maxLon обязателен/);
+  assert.throws(() => readBbox(new URLSearchParams("minLat=-91&maxLat=2&minLon=3&maxLon=4")), /допустимый диапазон/);
+  assert.deepEqual(readBbox(new URLSearchParams("minLat=1&maxLat=2&minLon=3&maxLon=4")), {
+    minLat: 1, maxLat: 2, minLon: 3, maxLon: 4,
+  });
+});
+
+test("serves hardened HTTP headers and rejects writes to static files", async () => {
+  const server = startServer(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const health = await fetch(`${base}/api/health`);
+    assert.equal(health.status, 200);
+    assert.match(health.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+    assert.equal(health.headers.get("x-content-type-options"), "nosniff");
+    const write = await fetch(`${base}/index.html`, { method: "POST" });
+    assert.equal(write.status, 405);
+    const head = await fetch(`${base}/index.html`, { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.ok(Number(head.headers.get("content-length")) > 0);
+    assert.equal(await head.text(), "");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await server.waitForCleanup();
+  }
 });
 
 test("removes stale Sber areas before scheduling an idle browser close", async () => {
@@ -200,6 +244,39 @@ test("normalizes a Multigo place without claiming fuel availability", () => {
 
 test("checks only probable-availability stations with a Yandex card", () => {
   assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: "123" }), true);
+  assert.equal(isYandexVerificationCandidate({
+    overallStatus: "maybe_available",
+    yandexOrgId: "123",
+    availabilityBySource: { tbank: { overallStatus: "available", fuelStatus: {} } },
+  }), true);
   assert.equal(isYandexVerificationCandidate({ overallStatus: "maybe_available", yandexOrgId: "123" }), false);
   assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: null }), false);
+});
+
+test("Yandex cache stores only Yandex enrichment, not an old station snapshot", async () => {
+  const previousFetch = globalThis.fetch;
+  let requests = 0;
+  clearYandexCache();
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response('<div class="search-fuel-info-view__name">АИ-95</div><div class="search-fuel-info-view__value">70,50 ₽</div>');
+  };
+  const base = {
+    name: "АЗС",
+    overallStatus: "available",
+    yandexOrgId: "123",
+    availabilityBySource: { tbank: { overallStatus: "available" } },
+    sourceRefs: [{ source: "tbank", externalId: "one" }],
+  };
+  try {
+    await enrichYandexPrices([{ ...base, prices: { 92: { value: 60 } } }]);
+    const second = await enrichYandexPrices([{ ...base, prices: { DT: { value: 75 } } }]);
+    assert.equal(requests, 1);
+    assert.equal(second.stations[0].prices.DT.value, 75);
+    assert.equal(second.stations[0].prices["95"].value, 70.5);
+    assert.equal(second.stations[0].prices["92"], undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    clearYandexCache();
+  }
 });

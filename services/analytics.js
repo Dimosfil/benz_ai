@@ -11,6 +11,7 @@ export class AnalyticsService {
     this.hashSalt = String(options.hashSalt || "").trim();
     this.adminToken = String(options.adminToken || "").trim();
     this.ssl = Boolean(options.ssl);
+    this.sslRejectUnauthorized = options.sslRejectUnauthorized !== false;
     this.poolFactory = options.poolFactory || ((poolOptions) => new Pool(poolOptions));
     this.pool = null;
     this.ready = false;
@@ -45,7 +46,7 @@ export class AnalyticsService {
     try {
       this.pool = this.poolFactory({
         connectionString: this.databaseUrl,
-        ssl: this.ssl ? { rejectUnauthorized: false } : undefined,
+        ssl: this.ssl ? { rejectUnauthorized: this.sslRejectUnauthorized } : undefined,
         max: 5,
         idleTimeoutMillis: 30_000,
         connectionTimeoutMillis: 10_000,
@@ -164,6 +165,7 @@ export class AnalyticsService {
   }
 
   async close() {
+    await this.initPromise?.catch(() => {});
     this.ready = false;
     await this.pool?.end().catch(() => {});
     this.pool = null;

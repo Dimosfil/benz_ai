@@ -1,4 +1,5 @@
 import {
+  formatPrice,
   labels,
   selectionStatus,
   stationConfidence,
@@ -151,9 +152,35 @@ export function mergeStationCache(stationCache, identityIndex, stationKeys, stat
       .map((identity) => identityIndex.get(identity))
       .find((key) => key && stationCache.has(key));
     const key = existingKey || stationCacheKey(station);
-    stationCache.set(key, station);
+    const previous = stationCache.get(key);
+    const previousPriceTime = Date.parse(previous?.priceUpdatedAt);
+    const incomingPriceTime = Date.parse(station.priceUpdatedAt);
+    const incomingPrices = station.prices || {};
+    const incomingPricesAreNewer = Object.keys(incomingPrices).length > 0
+      && ((!Number.isFinite(previousPriceTime) && Number.isFinite(incomingPriceTime))
+        || (Number.isFinite(incomingPriceTime) && incomingPriceTime >= previousPriceTime)
+        || (!Number.isFinite(previousPriceTime) && !Number.isFinite(incomingPriceTime)));
+    const merged = previous ? {
+      ...previous,
+      ...station,
+      sourceRefs: [...new Map([...(previous.sourceRefs || []), ...(station.sourceRefs || [])]
+        .map((ref) => [`${ref.source}:${String(ref.externalId ?? "")}`, ref])).values()],
+      prices: incomingPricesAreNewer
+        ? { ...(previous.prices || {}), ...incomingPrices }
+        : { ...incomingPrices, ...(previous.prices || {}) },
+      links: { ...(previous.links || {}), ...(station.links || {}) },
+      availabilityBySource: { ...(previous.availabilityBySource || {}), ...(station.availabilityBySource || {}) },
+      nameAliases: [...new Set([...(previous.nameAliases || []), ...(station.nameAliases || [])])],
+      addressAliases: [...new Set([...(previous.addressAliases || []), ...(station.addressAliases || [])])],
+      priceUpdatedAt: incomingPricesAreNewer
+        ? station.priceUpdatedAt || previous.priceUpdatedAt || null
+        : previous.priceUpdatedAt || station.priceUpdatedAt || null,
+      yandexOrgId: station.yandexOrgId || previous.yandexOrgId || null,
+    } : station;
+    stationCache.set(key, merged);
     stationKeys.set(station, key);
-    identities.forEach((identity) => identityIndex.set(identity, key));
+    stationKeys.set(merged, key);
+    stationSourceIdentityKeys(merged).forEach((identity) => identityIndex.set(identity, key));
   }
 }
 
@@ -220,7 +247,9 @@ function popupFor(station, selectedFuels) {
     );
     statusCard.append(confidenceRow);
   } else {
-    statusCard.append(text("p", "Статус рассчитан по доступным данным агрегатора.", "map-popup-status-note"));
+    statusCard.append(text("p", status === "no_data"
+      ? "Источники не передали актуальные данные о наличии."
+      : "Статус рассчитан по доступным сигналам агрегатора.", "map-popup-status-note"));
   }
   if (station.detail) statusCard.append(text("p", station.detail, "map-popup-detail"));
   popup.append(statusCard);
@@ -240,7 +269,7 @@ function popupFor(station, selectedFuels) {
       );
       row.append(name, text("strong", fuel.price == null
         ? "—"
-        : `${fuel.price.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`, "map-popup-price"));
+        : formatPrice(fuel.price, fuel.currency), "map-popup-price"));
       fuelList.append(row);
     });
     fuelSection.append(fuelList);
@@ -257,7 +286,7 @@ function popupFor(station, selectedFuels) {
   const links = document.createElement("div");
   links.className = "map-popup-links";
   const primaryLink = station.links?.yandex || station.links?.twoGis;
-  appendLink(links, primaryLink, "Проложить маршрут ↗", "map-popup-route");
+  appendLink(links, primaryLink, station.links?.yandex ? "Открыть в Яндекс Картах ↗" : "Открыть в 2ГИС ↗", "map-popup-route");
   if (station.links?.yandex && station.links?.twoGis) appendLink(links, station.links.twoGis, "Открыть в 2ГИС", "map-popup-secondary-link");
   if (links.childElementCount) popup.append(links);
   return popup;
@@ -321,6 +350,7 @@ export function createStationMap({ container, message, count }) {
   let locatePending = null;
   let userLayer = null;
   let activePopupStationKey = null;
+  let failedSources = [];
 
   function showMessage(value) {
     message.textContent = value || "";
@@ -336,6 +366,7 @@ export function createStationMap({ container, message, count }) {
   function updateVisibleCount({ loading = false } = {}) {
     const visible = visibleFilteredStations();
     count.textContent = `${visible.length.toLocaleString("ru-RU")} АЗС${loading ? " · догружаем…" : ""}`;
+    count.title = failedSources.length ? `Не ответили источники: ${failedSources.join(", ")}` : "";
     if (!loading) showMessage(
       visible.length || !viewportStations.length || activePopupStationKey
         ? ""
@@ -358,6 +389,9 @@ export function createStationMap({ container, message, count }) {
     for (const [key, station] of stationCache) {
       if (stationWithinBounds(station, bounds)) continue;
       stationCache.delete(key);
+      for (const [identity, indexedKey] of stationIdentityIndex) {
+        if (indexedKey === key) stationIdentityIndex.delete(identity);
+      }
       changed = true;
     }
     if (changed) syncStationCache();
@@ -378,6 +412,10 @@ export function createStationMap({ container, message, count }) {
       const status = stationMapStatus(station, filters.fuels);
       const existing = markerCache.get(key);
       if (existing) {
+        existing.options.title = station.name || "АЗС";
+        existing.options.alt = `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`;
+        existing.getElement?.()?.setAttribute("title", existing.options.title);
+        existing.getElement?.()?.setAttribute("aria-label", existing.options.alt);
         if (existing.options.stationStatus !== status) {
           existing.options.stationStatus = status;
           existing.setIcon(markerIcon(L, status));
@@ -438,6 +476,7 @@ export function createStationMap({ container, message, count }) {
       markers.clearLayers();
       markerCache.clear();
       activePopupStationKey = null;
+      failedSources = [];
       count.textContent = "0 АЗС";
       showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
       return;
@@ -465,6 +504,7 @@ export function createStationMap({ container, message, count }) {
       request.abort();
     }, VIEWPORT_REQUEST_TIMEOUT_MS);
     const hasCachedStations = stationCache.size > 0;
+    failedSources = [];
     updateVisibleCount({ loading: true });
     if (!hasCachedStations) showMessage("Загружаем АЗС рядом с видимой областью…");
     try {
@@ -474,6 +514,9 @@ export function createStationMap({ container, message, count }) {
         (data) => {
           if (request.signal.aborted || sequence !== requestSequence) return;
           mergeStations(Array.isArray(data.stations) ? data.stations : []);
+          if (Array.isArray(data.failedSources)) {
+            failedSources = [...new Set([...failedSources, ...data.failedSources])];
+          }
           if (stationCache.size) showMessage("");
           renderMarkers({ loading: true });
         },
@@ -554,6 +597,7 @@ export function createStationMap({ container, message, count }) {
     markers.clearLayers();
     markerCache.clear();
     activePopupStationKey = null;
+    failedSources = [];
     count.textContent = "0 АЗС";
     showMessage("");
   }

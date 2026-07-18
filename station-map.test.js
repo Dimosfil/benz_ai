@@ -40,6 +40,45 @@ test("stream snapshots update one cached station when its preferred name changes
   assert.equal(identityIndex.get("source:multigo:station-98"), originalKey);
 });
 
+test("partial stream snapshots preserve prices from the full summary", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  const full = {
+    name: "АЗС",
+    lat: 55,
+    lon: 37,
+    sourceRefs: [{ source: "tbank", externalId: "one" }, { source: "yandex", externalId: "two" }],
+    prices: { 95: { value: 70, currency: "RUB", source: "yandex" } },
+    priceUpdatedAt: "сегодня",
+  };
+  const partial = { ...full, sourceRefs: [full.sourceRefs[0]], prices: {}, priceUpdatedAt: null };
+  mergeStationCache(cache, identityIndex, stationKeys, [full]);
+  mergeStationCache(cache, identityIndex, stationKeys, [partial]);
+  const merged = [...cache.values()][0];
+  assert.equal(merged.prices["95"].value, 70);
+  assert.equal(merged.priceUpdatedAt, "сегодня");
+  assert.equal(merged.sourceRefs.length, 2);
+});
+
+test("an older map snapshot cannot overwrite a newer price", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  const base = { name: "АЗС", lat: 55, lon: 37, sourceRefs: [{ source: "tbank", externalId: "one" }] };
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    ...base,
+    prices: { 95: { value: 70, currency: "RUB" } },
+    priceUpdatedAt: "2026-07-18T10:00:00Z",
+  }]);
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    ...base,
+    prices: { 95: { value: 60, currency: "RUB" } },
+    priceUpdatedAt: "2026-07-17T10:00:00Z",
+  }]);
+  assert.equal([...cache.values()][0].prices["95"].value, 70);
+});
+
 test("map cluster chart reflects the child station status distribution", () => {
   assert.equal(clusterStatusChart(["not_available", "not_available"]), "#ef4444");
   assert.equal(
