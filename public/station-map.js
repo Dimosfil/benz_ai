@@ -76,6 +76,10 @@ export function stationViewportUrl({ south, north, west, east }) {
   return `/api/stations/stream?${params}`;
 }
 
+export function supportsViewportZoom(zoom) {
+  return Number(zoom) >= MIN_VIEWPORT_ZOOM;
+}
+
 export function padViewportBounds(bounds, ratio) {
   const latitudePadding = (bounds.north - bounds.south) * ratio;
   const longitudePadding = (bounds.east - bounds.west) * ratio;
@@ -351,6 +355,7 @@ export function createStationMap({ container, message, count }) {
   let userLayer = null;
   let activePopupStationKey = null;
   let failedSources = [];
+  let lowZoomMode = false;
 
   function showMessage(value) {
     message.textContent = value || "";
@@ -464,23 +469,30 @@ export function createStationMap({ container, message, count }) {
     activeRequest = null;
   }
 
+  function enterLowZoomMode() {
+    cancelViewportLoad();
+    if (lowZoomMode) return;
+    lowZoomMode = true;
+    requestSequence += 1;
+    loadedBounds = null;
+    stationCache.clear();
+    stationIdentityIndex.clear();
+    viewportStations = [];
+    markers.clearLayers();
+    markerCache.clear();
+    activePopupStationKey = null;
+    failedSources = [];
+    count.textContent = "0 АЗС";
+    showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
+  }
+
   async function loadViewport() {
     loadTimer = null;
-    if (map.getZoom() < MIN_VIEWPORT_ZOOM) {
-      activeRequest?.abort();
-      activeRequest = null;
-      loadedBounds = null;
-      stationCache.clear();
-      stationIdentityIndex.clear();
-      viewportStations = [];
-      markers.clearLayers();
-      markerCache.clear();
-      activePopupStationKey = null;
-      failedSources = [];
-      count.textContent = "0 АЗС";
-      showMessage("Приблизьте карту, чтобы загрузить АЗС в видимой области.");
+    if (!supportsViewportZoom(map.getZoom())) {
+      enterLowZoomMode();
       return;
     }
+    lowZoomMode = false;
 
     const visibleBounds = plainMapBounds(map.getBounds());
     const desiredBounds = padViewportBounds(visibleBounds, VIEWPORT_PREFETCH_RATIO);
@@ -538,6 +550,11 @@ export function createStationMap({ container, message, count }) {
   }
 
   function scheduleViewportLoad({ immediate = false } = {}) {
+    if (!supportsViewportZoom(map.getZoom())) {
+      enterLowZoomMode();
+      return;
+    }
+    lowZoomMode = false;
     clearTimeout(loadTimer);
     loadTimer = setTimeout(loadViewport, immediate ? 0 : VIEWPORT_DEBOUNCE_MS);
   }
@@ -627,16 +644,22 @@ export function createStationMap({ container, message, count }) {
       if (!deferViewportLoad) scheduleViewportLoad({ immediate: true });
       return;
     }
+    lowZoomMode = false;
     loadedBounds = null;
     stationCache.clear();
     stationIdentityIndex.clear();
     mergeStations(stations);
     if (deferViewportLoad) return;
-    renderMarkers();
     map.invalidateSize({ pan: false });
-    if (fit && focusStations(focus)) {
+    const focused = fit && focusStations(focus);
+    if (!supportsViewportZoom(map.getZoom())) {
+      enterLowZoomMode();
+      return;
+    }
+    renderMarkers();
+    if (focused) {
       // The moveend event schedules loading for the newly focused viewport.
-    } else if (!deferViewportLoad) {
+    } else {
       scheduleViewportLoad({ immediate: true });
     }
   }
@@ -651,6 +674,11 @@ export function createStationMap({ container, message, count }) {
     loadedBounds = null;
     map.invalidateSize({ pan: false });
     if (Array.isArray(focus) && focus.length) focusStations(focus);
+    if (!supportsViewportZoom(map.getZoom())) {
+      enterLowZoomMode();
+      return;
+    }
+    lowZoomMode = false;
     renderMarkers({ loading: true });
     scheduleViewportLoad({ immediate: true });
   }

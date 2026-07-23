@@ -8,6 +8,7 @@ import {
   stationMapStatus,
   stationViewportUrl,
   stationWithinBounds,
+  supportsViewportZoom,
   uncoveredViewportBounds,
 } from "./public/station-map.js";
 
@@ -122,6 +123,12 @@ test("map viewport request uses the visible bounds", () => {
   assert.equal(url.searchParams.get("maxLon"), "39.400000");
 });
 
+test("map loads stations only at a detailed enough zoom", () => {
+  assert.equal(supportsViewportZoom(7), false);
+  assert.equal(supportsViewportZoom(8), true);
+  assert.equal(supportsViewportZoom(13), true);
+});
+
 test("map pads the viewport for prefetch and retains stations inside the outer frame", () => {
   const visible = { south: 50, north: 52, west: 38, east: 42 };
   assert.deepEqual(padViewportBounds(visible, 0.5), { south: 49, north: 53, west: 36, east: 44 });
@@ -192,8 +199,21 @@ test("map activation cancels stale hidden requests before loading the visible vi
   assert.match(activation, /loadedBounds = null/);
   assert.match(activation, /invalidateSize\(\{ pan: false \}\)/);
   assert.match(activation, /focusStations\(focus\)/);
+  assert.match(activation, /if \(!supportsViewportZoom\(map\.getZoom\(\)\)\) \{[\s\S]*?enterLowZoomMode\(\);[\s\S]*?return;/);
   assert.match(activation, /renderMarkers\(\{ loading: true \}\)/);
   assert.match(activation, /scheduleViewportLoad\(\{ immediate: true \}\)/);
-  assert.match(source, /else if \(!deferViewportLoad\)/);
-  assert.match(source, /mergeStations\(stations\);\s+if \(deferViewportLoad\) return;\s+renderMarkers\(\)/);
+  assert.match(source, /mergeStations\(stations\);\s+if \(deferViewportLoad\) return;/);
+});
+
+test("far zoom mode clears markers only when the mode is entered", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+  const lowZoom = source.match(/function enterLowZoomMode\(\) \{([\s\S]*?)\n  \}\n\n  async function loadViewport/)?.[1] || "";
+  const showStations = source.match(/function showStations\(stations,[\s\S]*?\) \{([\s\S]*?)\n  \}\n\n  function deactivate/)?.[1] || "";
+
+  assert.match(lowZoom, /cancelViewportLoad\(\);\s+if \(lowZoomMode\) return;/);
+  assert.match(lowZoom, /markers\.clearLayers\(\)/);
+  assert.match(showStations, /if \(!supportsViewportZoom\(map\.getZoom\(\)\)\) \{[\s\S]*?enterLowZoomMode\(\);[\s\S]*?return;[\s\S]*?\}\s+renderMarkers\(\)/);
 });
