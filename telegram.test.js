@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createBenzTelegramHandler, formatTelegramSummary } from "./services/telegram-bot.js";
+import { createBenzTelegramHandler, formatTelegramSummary, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { isValidTelegramToken, TelegramPollingGateway, telegramMessageChunks } from "./services/telegram-gateway.js";
 
 test("validates Telegram bot tokens without exposing them", () => {
@@ -41,6 +41,8 @@ test("explains how to search for a city or district without starting a lookup", 
   assert.match(response, /район города: Коминтерновский район, Воронеж/);
   assert.match(response, /район области: Новоусманский район, Воронежская область/);
   assert.match(response, /\/refresh Новая Усмань/);
+  assert.match(response, /https:\/\/daimnebenz\.bothost\.tech\//);
+  assert.match(TELEGRAM_BOT_PROFILE.description, /https:\/\/daimnebenz\.bothost\.tech\//);
 });
 
 test("configures Telegram commands and bot descriptions", async () => {
