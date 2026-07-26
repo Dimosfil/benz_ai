@@ -19,6 +19,7 @@ const fuelNames = Object.freeze({ DT: "ДТ", LPG: "Пропан", CNG: "Мет�
 const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
 const RELIABLE_AVAILABILITY_MIN_SIGNALS = 2;
 const RELIABLE_AVAILABILITY_MIN_AGREEMENT = 80;
+const FRESH_PAYMENT_MAX_AGE_MS = 60 * 60_000;
 const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
 
 export function fuelName(type) {
@@ -34,11 +35,23 @@ function rawSelectionStatus(station, selected) {
 
 function sourceStatuses(station, selected = []) {
   return Object.values(station.availabilityBySource || {}).map((signal) => {
-    if (!selected.length) return signal.overallStatus;
-    const values = selected.map((type) => signal.fuelStatus?.[type]).filter(Boolean);
+    if (!selected.length) return freshnessAwareSignalStatus(signal, signal.overallStatus);
+    const values = selected
+      .map((type) => freshnessAwareSignalStatus(signal, signal.fuelStatus?.[type]))
+      .filter(Boolean);
     if (!values.length) return "no_data";
     return new Set(values).size === 1 ? values[0] : "maybe_available";
   }).filter((status) => status && status !== "no_data");
+}
+
+function freshnessAwareSignalStatus(signal, status) {
+  if (status !== "available") return status;
+  const observedAt = Date.parse(signal.observedAt);
+  if (!Number.isFinite(observedAt)) return status;
+  if (observedAt > Date.now() + 5 * 60_000 || Date.now() - observedAt > FRESH_PAYMENT_MAX_AGE_MS) {
+    return "maybe_available";
+  }
+  return status;
 }
 
 function confidenceFromStatuses(statuses) {
@@ -58,10 +71,12 @@ function confidenceFromStatuses(statuses) {
 export function selectionStatus(station, selected = []) {
   const status = rawSelectionStatus(station, selected);
   if (status !== "available") return status;
-  const confidence = confidenceFromStatuses(sourceStatuses(station, selected));
+  const statuses = sourceStatuses(station, selected);
+  const confidence = confidenceFromStatuses(statuses);
   const reliable = confidence
     && confidence.total >= RELIABLE_AVAILABILITY_MIN_SIGNALS
-    && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT;
+    && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT
+    && statuses.every((value) => value === "available");
   return reliable ? "available" : "maybe_available";
 }
 
@@ -124,10 +139,22 @@ export function stationLastPaymentAt(station) {
 
 export function stationFreshText(station) {
   const lastPaymentAt = stationLastPaymentAt(station);
+  const ageMs = lastPaymentAt ? Math.max(0, Date.now() - Date.parse(lastPaymentAt)) : null;
   const payment = lastPaymentAt
-    ? `Последняя оплата: ${formatter.format(new Date(lastPaymentAt))}`
+    ? ageMs > FRESH_PAYMENT_MAX_AGE_MS
+      ? `⚠ Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждение устарело (${formatAge(ageMs)} назад)`
+      : `Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждено ${formatAge(ageMs)} назад`
     : "Данных о последней оплате нет";
   return station.priceUpdatedAt ? `${payment} · цены: ${station.priceUpdatedAt}` : payment;
+}
+
+function formatAge(ageMs) {
+  const minutes = Math.max(0, Math.floor(ageMs / 60_000));
+  if (minutes < 1) return "только что";
+  if (minutes < 60) return `${minutes} мин`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} ч ${remainder} мин` : `${hours} ч`;
 }
 
 export function minimumPrice(station) {

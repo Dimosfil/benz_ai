@@ -125,6 +125,23 @@ test("downgrades a lone positive source before building the summary", () => {
   assert.equal(summarizeStations([merged]).statuses.maybe_available, 1);
 });
 
+test("downgrades matching positive sources when their observations are older than one hour", () => {
+  const observedAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  const first = station("alfa", "one", 55, 37, "АЗС");
+  first.availabilityBySource = {
+    alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+  };
+  const second = station("sber", "two", 55.00001, 37.00001, "АЗС");
+  second.availabilityBySource = {
+    sber: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+  };
+
+  const [merged] = mergeStations([first, second]);
+
+  assert.equal(merged.overallStatus, "maybe_available");
+  assert.equal(merged.fuelStatus["92"], "maybe_available");
+});
+
 test("keeps a price paired with the newest publication time", () => {
   const old = station("benzup", "old", 55, 37, "АЗС");
   old.prices = { 92: { value: 50, currency: "RUB", source: "benzup" } };

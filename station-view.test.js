@@ -62,18 +62,19 @@ test("station confidence reflects disagreement between sources", () => {
 });
 
 test("uses green only for strongly confirmed availability", () => {
+  const freshObservedAt = new Date(Date.now() - 10 * 60_000).toISOString();
   const oneSignal = {
     overallStatus: "available",
     fuelStatus: { 92: "available" },
     availabilityBySource: {
-      alfa: { overallStatus: "available", fuelStatus: { 92: "available" } },
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: freshObservedAt },
     },
   };
   const twoSignals = {
     ...oneSignal,
     availabilityBySource: {
       ...oneSignal.availabilityBySource,
-      sber: { overallStatus: "available", fuelStatus: { 92: "available" } },
+      sber: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: freshObservedAt },
     },
   };
 
@@ -81,6 +82,21 @@ test("uses green only for strongly confirmed availability", () => {
   assert.equal(selectionStatus(oneSignal, ["92"]), "maybe_available");
   assert.equal(selectionStatus(twoSignals), "available");
   assert.equal(selectionStatus(twoSignals, ["92"]), "available");
+});
+
+test("turns matching but two-hour-old positive signals yellow", () => {
+  const staleObservedAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  const station = {
+    overallStatus: "available",
+    fuelStatus: { 92: "available" },
+    availabilityBySource: {
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: staleObservedAt },
+      sber: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: staleObservedAt },
+    },
+  };
+
+  assert.equal(selectionStatus(station), "maybe_available");
+  assert.equal(selectionStatus(station, ["92"]), "maybe_available");
 });
 
 test("keeps a 50 percent signal yellow", () => {
@@ -105,5 +121,17 @@ test("shows the latest bank payment without treating a crowd report as payment",
   };
 
   assert.equal(stationLastPaymentAt(station), "2026-07-15T11:30:00.000Z");
-  assert.match(stationFreshText(station), /^Последняя оплата: /);
+  assert.match(stationFreshText(station), /^⚠ Последняя оплата: /);
+  assert.match(stationFreshText(station), /подтверждение устарело/);
+});
+
+test("explains when a recent payment still supports availability", () => {
+  const observedAt = new Date(Date.now() - 15 * 60_000).toISOString();
+  const text = stationFreshText({
+    availabilityBySource: { alfa: { observedAt } },
+    priceUpdatedAt: null,
+  });
+
+  assert.match(text, /^Последняя оплата: /);
+  assert.match(text, /подтверждено 15 мин назад/);
 });

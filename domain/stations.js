@@ -156,6 +156,19 @@ function reliableAggregateStatus(values) {
   return status === "available" && known.length < 2 ? "maybe_available" : status;
 }
 
+const AVAILABLE_SIGNAL_MAX_AGE_MS = 60 * 60_000;
+
+function freshnessAwareStatus(signal, fuel = null, now = Date.now()) {
+  const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
+  if (status !== "available") return status;
+  const observedAt = Date.parse(signal.observedAt);
+  if (!Number.isFinite(observedAt)) return status;
+  if (observedAt > now + 5 * 60_000 || now - observedAt > AVAILABLE_SIGNAL_MAX_AGE_MS) {
+    return "maybe_available";
+  }
+  return status;
+}
+
 function latestObservedAt(values) {
   const timestamps = values.filter((value) => Number.isFinite(Date.parse(value)));
   return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
@@ -199,11 +212,12 @@ function mergeEvidenceBySource(left = {}, right = {}) {
 
 function recomputeAvailability(station) {
   const evidence = Object.values(station.availabilityBySource || {});
-  station.overallStatus = reliableAggregateStatus(evidence.map((item) => item.overallStatus));
+  const now = Date.now();
+  station.overallStatus = reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, null, now)));
   const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})));
   station.fuelStatus = Object.fromEntries([...fuels].map((fuel) => [
     fuel,
-    reliableAggregateStatus(evidence.map((item) => item.fuelStatus?.[fuel]).filter(Boolean)),
+    reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, fuel, now)).filter(Boolean)),
   ]));
   const observed = evidence.map((item) => item.observedAt).filter((value) => Number.isFinite(Date.parse(value)));
   station.lastTransactionAt = observed.length
