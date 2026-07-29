@@ -172,6 +172,7 @@ button:disabled{opacity:.6;cursor:wait}
 .station-cluster.medium>span{width:27px;height:27px}.station-cluster.large>span{width:29px;height:29px}
 .station-popup .leaflet-popup-content-wrapper{overflow:hidden;border:1px solid #dfe7e1;border-radius:22px;background:#fbfdfb;box-shadow:0 22px 55px #10251e35}
 .station-popup .leaflet-popup-content{width:380px!important;margin:0;line-height:1.4}
+.station-popup .leaflet-popup-scrolled{border:0;overscroll-behavior:contain;scrollbar-gutter:stable}
 .station-popup .leaflet-popup-tip{background:#fbfdfb}
 .station-popup .leaflet-popup-close-button{top:13px!important;right:13px!important;display:grid!important;width:34px!important;height:34px!important;padding:0!important;place-items:center;border:1px solid #dbe4dd!important;border-radius:50%;background:#fff!important;color:#5d6b62!important;font-size:24px!important;line-height:1!important;box-shadow:0 3px 10px #17322212}
 .station-popup .leaflet-popup-close-button:hover{background:#f0f5f1!important;color:#17211b!important}

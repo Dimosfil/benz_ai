@@ -157,6 +157,8 @@ function reliableAggregateStatus(values) {
 }
 
 const AVAILABLE_SIGNAL_MAX_AGE_MS = 60 * 60_000;
+const RECENT_PAYMENT_CONFIRMATION_MS = 15 * 60_000;
+const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
 
 function freshnessAwareStatus(signal, fuel = null, now = Date.now()) {
   const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
@@ -167,6 +169,16 @@ function freshnessAwareStatus(signal, fuel = null, now = Date.now()) {
     return "maybe_available";
   }
   return status;
+}
+
+function hasRecentPaymentConfirmation(availabilityBySource, now = Date.now()) {
+  return Object.entries(availabilityBySource || {}).some(([source, signal]) => {
+    if (!PAYMENT_SOURCES.has(source) || signal.overallStatus !== "available") return false;
+    const observedAt = Date.parse(signal.observedAt);
+    return Number.isFinite(observedAt)
+      && observedAt <= now + 5 * 60_000
+      && now - observedAt <= RECENT_PAYMENT_CONFIRMATION_MS;
+  });
 }
 
 function latestObservedAt(values) {
@@ -213,7 +225,9 @@ function mergeEvidenceBySource(left = {}, right = {}) {
 function recomputeAvailability(station) {
   const evidence = Object.values(station.availabilityBySource || {});
   const now = Date.now();
-  station.overallStatus = reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, null, now)));
+  station.overallStatus = hasRecentPaymentConfirmation(station.availabilityBySource, now)
+    ? "available"
+    : reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, null, now)));
   const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})));
   station.fuelStatus = Object.fromEntries([...fuels].map((fuel) => [
     fuel,

@@ -179,13 +179,15 @@ test("viewport refresh reconciles markers without destroying an open popup", asy
   assert.match(source, /visible\.length \|\| !viewportStations\.length \|\| activePopupStationKey/);
 });
 
-test("opening station information does not move the map viewport", async () => {
+test("opening station information keeps the popup inside the map viewport", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(
     new URL("./public/station-map.js", import.meta.url),
     "utf8",
   ));
 
-  assert.match(source, /bindPopup\([\s\S]*?\{ autoPan: false,/);
+  assert.match(source, /bindPopup\([\s\S]*?autoPan: true,/);
+  assert.match(source, /keepInView: true,/);
+  assert.match(source, /maxHeight: Math\.max\(240, map\.getSize\(\)\.y - 96\),/);
 });
 
 test("map activation cancels stale hidden requests before loading the visible viewport", async () => {

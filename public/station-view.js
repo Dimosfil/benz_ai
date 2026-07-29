@@ -20,6 +20,7 @@ const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeSty
 const RELIABLE_AVAILABILITY_MIN_SIGNALS = 2;
 const RELIABLE_AVAILABILITY_MIN_AGREEMENT = 80;
 const FRESH_PAYMENT_MAX_AGE_MS = 60 * 60_000;
+const RECENT_PAYMENT_CONFIRMATION_MS = 15 * 60_000;
 const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
 
 export function fuelName(type) {
@@ -69,6 +70,7 @@ function confidenceFromStatuses(statuses) {
 }
 
 export function selectionStatus(station, selected = []) {
+  if (!selected.length && hasRecentPaymentConfirmation(station)) return "available";
   const status = rawSelectionStatus(station, selected);
   if (status !== "available") return status;
   const statuses = sourceStatuses(station, selected);
@@ -78,6 +80,16 @@ export function selectionStatus(station, selected = []) {
     && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT
     && statuses.every((value) => value === "available");
   return reliable ? "available" : "maybe_available";
+}
+
+export function hasRecentPaymentConfirmation(station, now = Date.now()) {
+  return Object.entries(station.availabilityBySource || {}).some(([source, signal]) => {
+    if (!PAYMENT_SOURCES.has(source) || signal.overallStatus !== "available") return false;
+    const observedAt = Date.parse(signal.observedAt);
+    return Number.isFinite(observedAt)
+      && observedAt <= now + 5 * 60_000
+      && now - observedAt <= RECENT_PAYMENT_CONFIRMATION_MS;
+  });
 }
 
 export function stationSources(station) {

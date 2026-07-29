@@ -142,6 +142,25 @@ test("downgrades matching positive sources when their observations are older tha
   assert.equal(merged.fuelStatus["92"], "maybe_available");
 });
 
+test("uses a bank payment from seven minutes ago as a strong station-level confirmation", () => {
+  const observedAt = new Date(Date.now() - 7 * 60_000).toISOString();
+  const bank = station("alfa", "fresh-payment", 55, 37, "АЗС");
+  bank.availabilityBySource = {
+    alfa: {
+      overallStatus: "available",
+      fuelStatus: { 92: "available", 95: "maybe_available", 98: "not_available" },
+      observedAt,
+    },
+  };
+
+  const [merged] = mergeStations([bank]);
+
+  assert.equal(merged.overallStatus, "available");
+  assert.equal(merged.fuelStatus["92"], "maybe_available");
+  assert.equal(merged.fuelStatus["95"], "maybe_available");
+  assert.equal(merged.fuelStatus["98"], "not_available");
+});
+
 test("keeps a price paired with the newest publication time", () => {
   const old = station("benzup", "old", 55, 37, "АЗС");
   old.prices = { 92: { value: 50, currency: "RUB", source: "benzup" } };

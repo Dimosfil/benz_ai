@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   selectionStatus,
+  hasRecentPaymentConfirmation,
   stationConfidence,
   stationFreshText,
   stationFuelEntries,
@@ -67,7 +68,7 @@ test("uses green only for strongly confirmed availability", () => {
     overallStatus: "available",
     fuelStatus: { 92: "available" },
     availabilityBySource: {
-      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: freshObservedAt },
+      gdebenz: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: freshObservedAt },
     },
   };
   const twoSignals = {
@@ -97,6 +98,21 @@ test("turns matching but two-hour-old positive signals yellow", () => {
 
   assert.equal(selectionStatus(station), "maybe_available");
   assert.equal(selectionStatus(station, ["92"]), "maybe_available");
+});
+
+test("uses a bank payment from seven minutes ago as a green station confirmation", () => {
+  const observedAt = new Date(Date.now() - 7 * 60_000).toISOString();
+  const station = {
+    overallStatus: "maybe_available",
+    fuelStatus: { 92: "available", 95: "maybe_available", 98: "not_available" },
+    availabilityBySource: {
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+    },
+  };
+
+  assert.equal(hasRecentPaymentConfirmation(station), true);
+  assert.equal(selectionStatus(station), "available");
+  assert.equal(selectionStatus(station, ["95"]), "maybe_available");
 });
 
 test("keeps a 50 percent signal yellow", () => {

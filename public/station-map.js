@@ -1,5 +1,6 @@
 import {
   formatPrice,
+  hasRecentPaymentConfirmation,
   labels,
   selectionStatus,
   stationConfidence,
@@ -212,7 +213,8 @@ function appendLink(container, href, label, className = "") {
 
 function popupFor(station, selectedFuels) {
   const status = stationMapStatus(station, selectedFuels);
-  const confidence = stationConfidence(station, selectedFuels);
+  const recentPayment = !selectedFuels.length && hasRecentPaymentConfirmation(station);
+  const confidence = recentPayment ? null : stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
   popup.className = `map-popup map-popup-${status}`;
 
@@ -233,7 +235,13 @@ function popupFor(station, selectedFuels) {
     text("strong", STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
   );
   statusCard.append(statusTop);
-  if (confidence) {
+  if (recentPayment) {
+    statusCard.append(text(
+      "p",
+      "Свежая банковская оплата подтверждает наличие хотя бы одного вида топлива. Статусы конкретных марок смотрите ниже.",
+      "map-popup-status-note",
+    ));
+  } else if (confidence) {
     const confidenceRow = element("div", "map-popup-confidence");
     const confidenceCopy = element("div", "map-popup-confidence-copy");
     confidenceCopy.append(
@@ -437,7 +445,15 @@ export function createStationMap({ container, message, count }) {
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
       }).bindPopup(
         () => popupFor(stationCache.get(key) || station, filters.fuels),
-        { autoPan: false, maxWidth: 410, minWidth: 300, className: "station-popup" },
+        {
+          autoPan: true,
+          keepInView: true,
+          autoPanPadding: [24, 24],
+          maxHeight: Math.max(240, map.getSize().y - 96),
+          maxWidth: 410,
+          minWidth: 300,
+          className: "station-popup",
+        },
       );
       marker.on("popupopen", () => {
         activePopupStationKey = key;
