@@ -199,6 +199,17 @@ test("opening station information keeps the popup inside the map viewport", asyn
   assert.match(source, /maxHeight: Math\.max\(240, map\.getSize\(\)\.y - 96\),/);
 });
 
+test("a lone availability source explains the yellow status instead of showing 100 percent agreement", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+
+  assert.match(source, /confidence && confidence\.total >= 2/);
+  assert.match(source, /confidence\?\.total === 1/);
+  assert.match(source, /Есть только один актуальный сигнал о наличии/);
+});
+
 test("map activation cancels stale hidden requests before loading the visible viewport", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(
     new URL("./public/station-map.js", import.meta.url),

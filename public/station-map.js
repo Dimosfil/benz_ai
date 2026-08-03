@@ -253,7 +253,7 @@ function popupFor(station, selectedFuels) {
       "Свежая банковская оплата подтверждает наличие хотя бы одного вида топлива. Статусы конкретных марок смотрите ниже.",
       "map-popup-status-note",
     ));
-  } else if (confidence) {
+  } else if (confidence && confidence.total >= 2) {
     const confidenceRow = element("div", "map-popup-confidence");
     const confidenceCopy = element("div", "map-popup-confidence-copy");
     confidenceCopy.append(
@@ -270,6 +270,14 @@ function popupFor(station, selectedFuels) {
       text("small", `${confidence.matching} из ${confidence.total} сигналов совпадают`),
     );
     statusCard.append(confidenceRow);
+  } else if (confidence?.total === 1) {
+    statusCard.append(text(
+      "p",
+      status === "maybe_available"
+        ? "Есть только один актуальный сигнал о наличии. Для зелёного статуса нужны два независимых подтверждения или свежая банковская оплата."
+        : "Статус основан на единственном актуальном сигнале источника.",
+      "map-popup-status-note",
+    ));
   } else {
     statusCard.append(text("p", status === "no_data"
       ? "Источники не передали актуальные данные о наличии."
