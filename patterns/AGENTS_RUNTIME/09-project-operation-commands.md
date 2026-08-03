@@ -1,5 +1,11 @@
 ## Project Operation Commands
 
+- Apply the project-local `config_service.enabled` toggle from
+  `08-config-service-and-task-manager` to every operation below. Query or write
+  config-service only when integration is effectively enabled. When disabled,
+  ordinary local operations use documented project-local runtime config;
+  config-service-specific operations stop with the disabled-state blocker and
+  point to `gi config on`.
 - Treat `gi prod`, `gi production`, `gi прод`, and `ги прод` as requests to
   publish the current development version of an online service into its
   documented production service folder. Use this only for services that run
@@ -185,10 +191,13 @@
   project-local run instructions. Before starting anything, identify the full
   app set from local run instructions, manifests, service records, desktop
   packaging metadata, or project memory; do not assume a successful web/API
-  start covers the project. For local web/API services, resolve the service id,
-  port, URL, and neighboring endpoints through config-service before running a
-  start command; fixed ports in local runbooks or examples do not authorize a
-  fallback bind. If the resolved port is occupied, verify whether the owner is
+  start covers the project. For local web/API services with config-service
+  integration enabled, resolve the service id, port, URL, and neighboring
+  endpoints through config-service before running a start command; fixed ports
+  in local runbooks or examples do not authorize a fallback bind. With
+  integration disabled, use only the documented project-local run config and
+  stop if required runtime values are missing. If the selected port is occupied,
+  verify whether the owner is
   the same documented service instance using project-local identity signals
   such as service id, command, cwd, health endpoint, or process metadata. If the
   port belongs to another service or ownership is unclear, stop and report the
@@ -199,8 +208,9 @@
   config-service registration workflow from `08-config-service-and-task-manager`
   to create or update it before startup, or stop with the exact missing
   contract. If local instructions define a preferred start/restart command that
-  launches the full app set, use it only with the config-service-resolved local
-  runtime values for web/API apps. Otherwise enumerate every documented app or
+  launches the full app set, use it with the runtime values selected by the
+  enabled config-service flow or the disabled project-local flow. Otherwise
+  enumerate every documented app or
   runtime, such as desktop app, web/API app, and background workers, then
   restart each running app and start each missing app. Launch in the background
   so focus does not jump away from the user's current window. After launch, wait

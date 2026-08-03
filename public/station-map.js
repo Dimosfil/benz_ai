@@ -42,6 +42,18 @@ export function hasMapCoordinates(station) {
     && Number(station.lon) <= 180;
 }
 
+export function territoryMapBounds(location) {
+  const bbox = location?.bbox;
+  const minLat = Number(bbox?.minLat);
+  const maxLat = Number(bbox?.maxLat);
+  const minLon = Number(bbox?.minLon);
+  const maxLon = Number(bbox?.maxLon);
+  if (![minLat, maxLat, minLon, maxLon].every(Number.isFinite)) return null;
+  if (minLat < -90 || maxLat > 90 || minLon < -180 || maxLon > 180) return null;
+  if (minLat >= maxLat || minLon >= maxLon) return null;
+  return [[minLat, minLon], [maxLat, maxLon]];
+}
+
 export function stationMapStatus(station, selectedFuels = []) {
   const status = selectionStatus(station, selectedFuels);
   return STATUS_COLORS.has(status) ? status : "no_data";
@@ -650,6 +662,23 @@ export function createStationMap({ container, message, count }) {
     return true;
   }
 
+  function focusTerritory(location) {
+    const bounds = territoryMapBounds(location);
+    if (bounds) {
+      map.fitBounds(bounds, { padding: [34, 34], maxZoom: 13 });
+      return true;
+    }
+    if (!hasMapCoordinates(location)) return false;
+    map.setView([Number(location.lat), Number(location.lon)], 11);
+    return true;
+  }
+
+  function focusSelection(focus) {
+    const stations = Array.isArray(focus) ? focus : focus?.stations;
+    if (Array.isArray(stations) && focusStations(stations)) return true;
+    return Array.isArray(focus) ? false : focusTerritory(focus?.location);
+  }
+
   function showStations(stations, {
     fit = false,
     protectUserLocation = false,
@@ -667,7 +696,7 @@ export function createStationMap({ container, message, count }) {
     mergeStations(stations);
     if (deferViewportLoad) return;
     map.invalidateSize({ pan: false });
-    const focused = fit && focusStations(focus);
+    const focused = fit && focusSelection(focus);
     if (!supportsViewportZoom(map.getZoom())) {
       enterLowZoomMode();
       return;
@@ -689,7 +718,7 @@ export function createStationMap({ container, message, count }) {
     deactivate();
     loadedBounds = null;
     map.invalidateSize({ pan: false });
-    if (Array.isArray(focus) && focus.length) focusStations(focus);
+    if (focus) focusSelection(focus);
     if (!supportsViewportZoom(map.getZoom())) {
       enterLowZoomMode();
       return;

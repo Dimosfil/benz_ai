@@ -27,12 +27,14 @@ variables, service discovery, or deployment metadata.
   generated artifacts; use project-local secret stores, environment variables,
   deployment secret managers, or secret references instead. Follow
   `patterns/API_KEY_SECRET_SAFETY.md`.
-- Use service identifiers and config-service records for local development
-  HTTP services instead of fixed ports, URLs, dashboard links, runbook examples,
-  or stale task-manager records. A local dev port or URL is valid only after it
-  is resolved from, assigned by, or written through the documented
-  config-service contract. Once recorded, that port is an exclusive runtime
-  contract for the service id: if the port is busy, verify the owner and either
+- When project config-service integration is enabled, use service identifiers
+  and config-service records for local development HTTP services instead of
+  fixed ports, URLs, dashboard links, runbook examples, or stale task-manager
+  records. A local dev port or URL is valid only after it is resolved from,
+  assigned by, or written through the documented config-service contract. When
+  integration is disabled, use only documented project-local runtime config and
+  do not query or publish to config-service. Once selected, that port is an
+  exclusive runtime contract for the service id: if the port is busy, verify the owner and either
   reuse/restart the same documented service through the run contract or stop
   with a port-conflict blocker. Do not take a neighboring free port, overwrite
   the service record, or stop an unverified process as a fallback. Changing the

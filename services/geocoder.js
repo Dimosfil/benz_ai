@@ -102,23 +102,27 @@ async function requestPlaces(query) {
   });
 }
 
-async function geocodeUncached(query, key, generation) {
+async function geocodeUncached(query, key, generation, normalizeQuery) {
   let found;
+  let fallback;
+  let normalized;
+  try { normalized = await normalizeQuery(query); }
+  catch { normalized = null; }
+
+  if (normalized) {
+    const results = await requestPlaces(normalized.query);
+    found = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
+  }
+
   for (const candidate of geocoderQueryCandidates(query)) {
+    if (found) break;
+    if (normalized && candidate.toLocaleLowerCase("ru-RU") === normalized.query.toLocaleLowerCase("ru-RU")) continue;
     const results = await requestPlaces(candidate);
     const exact = results.find((item) => exactCandidateMatch(item, candidate));
     if (exact) { found = exact; break; }
-    found ||= results[0];
+    fallback ||= results[0];
   }
-  const hasExactMatch = found && geocoderQueryCandidates(query).some((candidate) => exactCandidateMatch(found, candidate));
-  if (!hasExactMatch) {
-    const normalized = await normalizeLocationQueryWithLlm(query);
-    if (normalized) {
-      const results = await requestPlaces(normalized.query);
-      const verified = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
-      if (verified) found = verified;
-    }
-  }
+  found ||= fallback;
   if (!found) throw new Error(`Не удалось найти «${query}» в России`);
 
   const [minLat, maxLat, minLon, maxLon] = found.boundingbox.map(Number);
@@ -140,14 +144,14 @@ async function geocodeUncached(query, key, generation) {
   return place;
 }
 
-export function geocodeLocation(rawQuery) {
+export function geocodeLocation(rawQuery, { normalizeQuery = normalizeLocationQueryWithLlm } = {}) {
   const query = String(rawQuery || "").trim();
   if (query.length < 2 || query.length > 100) return Promise.reject(new Error("Введите город или область — от 2 до 100 символов"));
   const key = query.toLocaleLowerCase("ru-RU");
   const saved = cache.get(key);
   if (saved && Date.now() - saved.createdAt < config.geocoder.cacheTtlMs) return Promise.resolve(saved.value);
   if (inflight.has(key)) return inflight.get(key);
-  const pending = geocodeUncached(query, key, cacheGeneration);
+  const pending = geocodeUncached(query, key, cacheGeneration, normalizeQuery);
   const shared = pending.finally(() => {
     if (inflight.get(key) === shared) inflight.delete(key);
   });

@@ -471,7 +471,10 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     renderSummary(data);
     renderStations();
     const matches = filteredStations();
-    const mapFocus = matches.length ? matches : allStations;
+    const mapFocus = {
+      stations: matches.length ? matches : allStations,
+      location: data.location,
+    };
     if (mapPanel.hidden) pendingMapFocus = mapFocus;
     stationMap.showStations(allStations, {
       fit: !mapPanel.hidden,

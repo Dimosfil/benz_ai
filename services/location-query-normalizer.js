@@ -1,4 +1,5 @@
 import { createDeepSeekProvider } from "../providers/deepseek.js";
+import { config } from "../config.js";
 
 const defaultProvider = createDeepSeekProvider();
 
@@ -14,11 +15,11 @@ export async function normalizeLocationQueryWithLlm(rawQuery, provider = default
   try {
     const response = await provider.generate({
       messages: [
-        { role: "system", content: "Нормализуй пользовательский запрос для геокодера населённых пунктов России. Исправь опечатки, падеж и разговорную форму, сохрани указанный регион. Не выдумывай место. Ответь только JSON: {\"query\":\"строка для геокодера\",\"placeName\":\"точное название населённого пункта\"}." },
+        { role: "system", content: "Нормализуй пользовательский запрос для геокодера населённых пунктов и административных территорий России: областей, краёв, республик, округов, городских и муниципальных районов. Исправь опечатки, падеж и разговорную форму, сохрани весь указанный географический контекст. Если запрос имеет вид «<город> <район>», сформируй однозначный запрос «<название> район, <город>, <регион>, Россия». Не выдумывай место. Ответь только JSON: {\"query\":\"однозначная строка для геокодера\",\"placeName\":\"точное название искомого объекта\"}." },
         { role: "user", content: original },
       ],
       temperature: 0,
-      maxTokens: 120,
+      maxTokens: config.deepseek.normalizerMaxTokens,
       json: true,
     });
     const parsed = parseJsonObject(response.output);

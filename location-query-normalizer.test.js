@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { config } from "./config.js";
 import { normalizeLocationQueryWithLlm } from "./services/location-query-normalizer.js";
 
 test("normalizes an arbitrary location query through the configured LLM", async () => {
@@ -17,7 +18,10 @@ test("normalizes an arbitrary location query through the configured LLM", async 
     placeName: "Бабяково",
   });
   assert.equal(request.temperature, 0);
+  assert.equal(request.maxTokens, config.deepseek.normalizerMaxTokens);
   assert.equal(request.json, true);
+  assert.match(request.messages[0].content, /административных территорий/);
+  assert.match(request.messages[0].content, /<город> <район>/);
 });
 
 test("skips LLM normalization when DeepSeek is not configured", async () => {

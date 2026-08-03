@@ -39,7 +39,7 @@ test("activates and focuses the map for an explicit search", async () => {
   assert.match(css, /\.map-section\{display:grid;height:100%;min-height:0;grid-template-rows:minmax\(0,1fr\)/);
   assert.match(css, /\.map-count\{position:absolute;[^}]+top:12px;right:12px/);
   assert.match(app, /loadSummary\(\{ activateMap: true \}\)/);
-  assert.match(app, /const mapFocus = matches\.length \? matches : allStations/);
+  assert.match(app, /const mapFocus = \{\s+stations: matches\.length \? matches : allStations,\s+location: data\.location,/);
   assert.match(app, /focus: mapFocus/);
 });
 

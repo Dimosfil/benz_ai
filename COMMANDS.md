@@ -116,6 +116,16 @@ gi full refactor
 ги тулс ребилд тесты
 ги раг ребилд тесты
 gi config
+gi config on
+gi config off
+gi конфиг вкл
+gi конфиг выкл
+gi конфиг он
+gi конфиг офф
+ги конфиг вкл
+ги конфиг выкл
+ги конфиг он
+ги конфиг офф
 gi config service
 gi config service url=http://127.0.0.1:4100
 gi config service on
@@ -229,6 +239,7 @@ the listed commands.
 | `gi tools rebuild evals`, `gi rag rebuild evals` | Run configured RAG health and retrieval eval checks only. |
 | `gi refactor`, `gi рефактор`, `ги рефактор` | Refactor the entire current project according to all applicable GI rules, in verified batches. |
 | `gi config`, `gi config service` | Inspect config/discovery service settings. |
+| `gi config on/off`, `ги конфиг вкл/выкл`, `ги конфиг он/офф` | Toggle config-service integration for the current project. New projects default to off; existing projects preserve their effective state. |
 | `gi config service url=<url>` | Set the config-service URL after validation. |
 | `gi config service on`, `gi config service off` | Toggle current app self-registration with config-service. |
 | `gi prod`, `gi production`, `gi прод`, `ги прод` | Publish the current development version into the documented production service folder for a live online service. |
@@ -737,6 +748,16 @@ checks pass.
 gi config
 gi конфиг
 ги конфиг
+gi config on
+gi config off
+gi конфиг вкл
+gi конфиг выкл
+gi конфиг он
+gi конфиг офф
+ги конфиг вкл
+ги конфиг выкл
+ги конфиг он
+ги конфиг офф
 gi config service
 ги конфиг сервис
 gi config service url=http://127.0.0.1:4100
@@ -744,8 +765,28 @@ gi config service url=http://127.0.0.1:4100
 ги конфиг сервис урл=http://127.0.0.1:4100
 ```
 
-Агент получает bootstrap-конфиг сервиса конфигов, а не ищет runtime-конфиги в
-папках соседних проектов. Сначала читать project-local override, если он явно
+`gi config on/off` / `ги конфиг вкл/выкл` / `ги конфиг он/офф` переключает использование
+config-service текущим проектом. Явное состояние хранится как
+`config_service.enabled` в `tools/project-memory/instruction-kit.json`. Новые
+проекты создаются со значением `false`. Для совместимости отсутствие поля в
+существующем проекте означает прежнее эффективное значение `true`; миграция не
+должна записывать таким проектам `false`. При выключенном тумблере агент и
+приложение не обращаются к config-service, не выполняют саморегистрацию и не
+делают обычный локальный запуск зависимым от него, а используют только
+документированный project-local runtime config. Команды, которым config-service
+необходим по контракту, останавливаются с коротким блокером и предлагают
+`gi config on`. Тумблер не запускает и не останавливает процесс config-service.
+Любая короткая форма `gi config <toggle>` / `ги конфиг <тумблер>` без слова
+`service` / `сервис` всегда управляет интеграцией целиком и никогда не означает
+саморегистрацию. Только форма `gi config service <toggle>` /
+`ги конфиг сервис <тумблер>` управляет саморегистрацией текущего приложения.
+
+`gi config` без значения показывает явное и эффективное состояние тумблера,
+включая legacy `true` при отсутствующем поле, затем URL и настройки
+саморегистрации.
+
+При включённом тумблере агент получает bootstrap-конфиг сервиса конфигов, а не
+ищет runtime-конфиги в папках соседних проектов. Сначала читать project-local override, если он явно
 задан локальными инструкциями, затем `config/gi-main.json` из checkout/cache
 канонического source repo `https://github.com/Dimosfil/general-instructions.git`,
 текущего checkout shared instructions или пути из `GENERAL_INSTRUCTIONS_HOME`.
@@ -1308,6 +1349,10 @@ supported, otherwise requests the next task through the documented operation,
 marks it in progress when supported, executes the task, and sends progress,
 blocker, or completion notes back to the manager.
 
+If project config-service integration is disabled, all manager-backed commands
+stop with that blocker and point to `gi config on`; they do not use stale or
+guessed manager endpoints.
+
 For WorkNest, external agents use `/agent-intake/...` API operations. They do
 not move Markdown files, edit internal statuses, archive tasks, or rely on an
 old local URL instead of resolving `service_id: worknest` through config-service.
@@ -1631,23 +1676,27 @@ explicitly define a discoverable web/API runtime. If the flag is being set to
 `on` and no config-service URL is configured, stop and tell the user to set
 `gi config service url=<url>` first. Do not reinterpret `on`/`off` as starting
 or stopping the config-service process.
+This self-registration flag is separate from `gi config on/off` and has effect
+only while project config-service integration is enabled.
 
 `gi reboot` / `gi restart` starts or restarts all documented applications in the
 current project using project-local run instructions. Before starting anything,
 identify the full app set from local run instructions, manifests, service
 records, desktop packaging metadata, or project memory; do not assume a
-successful web/API start covers the project. For local web/API services,
-resolve the service id, port, URL, and neighboring endpoints through
-config-service before running a start command; fixed ports in local runbooks or
-examples do not authorize a fallback bind. If the resolved port is occupied,
+successful web/API start covers the project. For local web/API services, when
+config-service integration is enabled, resolve the service id, port, URL, and
+neighboring endpoints through config-service before running a start command;
+fixed ports in local runbooks or examples do not authorize a fallback bind.
+When integration is disabled, use only documented project-local runtime config
+and stop if required values are missing. If the selected port is occupied,
 verify whether the owner is the same documented service; otherwise report a
 port-conflict blocker and do not move the app to another port. If a
 config-service record is missing, use only the documented config-service
 registration workflow to create or update it before startup, or stop with the
 exact missing contract. If local
 instructions define a preferred start/restart command that launches the full
-app set, use it only with the config-service-resolved local runtime values for
-web/API apps. Otherwise enumerate every documented app or runtime, such as
+app set, use it with runtime values selected by the enabled config-service flow
+or the disabled project-local flow. Otherwise enumerate every documented app or runtime, such as
 desktop app, web/API app, and background workers, then restart each running app
 and start each missing app in the background. After launch, wait briefly and
 verify the documented startup success signal for each app: expected processes

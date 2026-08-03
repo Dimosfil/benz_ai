@@ -15,7 +15,27 @@
   `configServiceUrl` or the explicit project-local override, and tell services
   to use that URL for registration and discovery. Do not scan sibling project
   folders, guess ports, copy URLs from old task-manager memory, or use stale
-  task-manager records as a runtime fallback.
+  task-manager records as a runtime fallback. For inspection forms, report the
+  explicit and effective integration-toggle state, including whether an absent
+  field is using legacy `true`, before reporting URL or registration settings.
+- Treat `gi config on`, `gi config off`, `gi конфиг вкл`, `gi конфиг выкл`,
+  `gi конфиг он`, `gi конфиг офф`, `ги конфиг вкл`, `ги конфиг выкл`,
+  `ги конфиг он`, and `ги конфиг офф` as the project-local config-service
+  integration toggle. Store the explicit state as `config_service.enabled` in
+  `tools/project-memory/instruction-kit.json`. Fresh GI bootstraps must create
+  this setting as `false`. To preserve working integrations, an existing
+  project whose metadata has no `config_service.enabled` field uses the legacy
+  effective value `true`; migrations must not insert `false` into such projects.
+  `on`/`вкл`/`он` writes `true`, and `off`/`выкл`/`офф` writes `false`. Any
+  short `gi config <toggle>` or `ги конфиг <toggle>` form without the explicit
+  `service`/`сервис` segment controls this whole-project integration toggle and
+  must never be interpreted as the app self-registration flag. When disabled, do
+  not query config-service, self-register, or require config-service discovery
+  during ordinary startup; use only documented project-local runtime config.
+  A command that inherently requires config-service, including manager-backed
+  task commands, must stop with a concise disabled-state blocker and point to
+  `gi config on`. Do not reinterpret this toggle as starting or stopping the
+  config-service process.
 - For agent-facing HTTP services, prefer a service-owned guide endpoint plus a
   strict contract endpoint. Resolve runtime URLs through config-service. Read
   `endpoints.guide` first when present, then `endpoints.contract` before
@@ -34,7 +54,8 @@
   guide/contract lacks the requested capability. Do not fall back to `base_url`,
   stale task-manager memory, port scans, sibling projects, or guessed endpoints.
 - Treat `gi config service on`, `gi config service off`, `ги конфиг сервис on`,
-  and `ги конфиг сервис off` as requests to set the current application's
+  `ги конфиг сервис off`, `ги конфиг сервис вкл`, `ги конфиг сервис выкл`,
+  `ги конфиг сервис он`, and `ги конфиг сервис офф` as requests to set the current application's
   project-local config-service self-registration flag. `on` means the app
   should publish or refresh its own service record during startup; `off` means
   it must not. Do not reinterpret this as starting or stopping config-service
@@ -88,7 +109,8 @@
   cycle creation operation, verify readback/lifecycle identifiers, and stop with
   the exact blocker if auth, permissions, schema, lifecycle, or object type
   support is missing. Do not downgrade the request to raw intake or a Work Item.
-- For web-facing applications that expose a port, HTTP API, web UI, task-manager
+- When the project-local config-service integration toggle is enabled, for
+  web-facing applications that expose a port, HTTP API, web UI, task-manager
   service, or local daemon endpoint, require a live config-service lookup before
   the process binds or reserves any port in local development. On every local
   startup, read the configured config-service URL, verify the config service is

@@ -35,7 +35,82 @@ test("accepts the corrected settlement after a city prefix", async () => {
     }] : []);
   };
   try {
-    assert.equal((await geocodeLocation("Воронеж бабякова")).name, "Бабяково");
+    assert.equal((await geocodeLocation("Воронеж бабякова", { normalizeQuery: async () => null })).name, "Бабяково");
+  } finally {
+    globalThis.fetch = previousFetch;
+    clearGeocoderCache();
+  }
+});
+
+test("uses LLM normalization before accepting an ambiguous raw geocoder result", async () => {
+  const previousFetch = globalThis.fetch;
+  clearGeocoderCache();
+  const requestedQueries = [];
+  globalThis.fetch = async (url) => {
+    const query = new URL(url).searchParams.get("q");
+    requestedQueries.push(query);
+    return Response.json(query.startsWith("Советский район") ? [{
+      name: "Советский район",
+      display_name: "Советский район, Воронеж, городской округ Воронеж, Воронежская область, Россия",
+      type: "administrative",
+      addresstype: "city_district",
+      lat: "51.6278",
+      lon: "39.1141",
+      boundingbox: ["51.5402", "51.7149", "39.0132", "39.2031"],
+      geojson: null,
+    }] : [{
+      name: "Советский",
+      display_name: "Советский, Бобровский район, Воронежская область, Россия",
+      type: "hamlet",
+      addresstype: "hamlet",
+      lat: "50.8849",
+      lon: "40.2103",
+      boundingbox: ["50.8649", "50.9049", "40.1903", "40.2303"],
+      geojson: null,
+    }]);
+  };
+  try {
+    const location = await geocodeLocation("Воронеж Советский", {
+      normalizeQuery: async () => ({
+        query: "Советский район, Воронеж, Воронежская область, Россия",
+        placeName: "Советский район",
+      }),
+    });
+    assert.equal(location.name, "Советский район");
+    assert.deepEqual(requestedQueries, ["Советский район, Воронеж, Воронежская область, Россия"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    clearGeocoderCache();
+  }
+});
+
+test("does not trust an LLM place name that Nominatim cannot verify", async () => {
+  const previousFetch = globalThis.fetch;
+  clearGeocoderCache();
+  globalThis.fetch = async (url) => {
+    const query = new URL(url).searchParams.get("q");
+    return Response.json(query === "Несуществующий район, Воронеж, Россия" ? [{
+      name: "Другой район",
+      display_name: "Другой район, Воронеж, Россия",
+      lat: "51.60",
+      lon: "39.10",
+      boundingbox: ["51.50", "51.70", "39.00", "39.20"],
+    }] : [{
+      name: "Воронеж",
+      display_name: "Воронеж, городской округ Воронеж, Воронежская область, Россия",
+      lat: "51.66",
+      lon: "39.20",
+      boundingbox: ["51.50", "51.85", "39.00", "39.40"],
+    }]);
+  };
+  try {
+    const location = await geocodeLocation("Воронеж", {
+      normalizeQuery: async () => ({
+        query: "Несуществующий район, Воронеж, Россия",
+        placeName: "Несуществующий район",
+      }),
+    });
+    assert.equal(location.name, "Воронеж");
   } finally {
     globalThis.fetch = previousFetch;
     clearGeocoderCache();

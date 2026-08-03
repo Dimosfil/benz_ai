@@ -9,6 +9,7 @@ import {
   stationViewportUrl,
   stationWithinBounds,
   supportsViewportZoom,
+  territoryMapBounds,
   uncoveredViewportBounds,
 } from "./public/station-map.js";
 
@@ -99,6 +100,14 @@ test("map accepts valid station coordinates and rejects invalid values", () => {
   assert.equal(hasMapCoordinates({ lat: "55.75", lon: "37.62" }), true);
   assert.equal(hasMapCoordinates({ lat: 100, lon: 37.62 }), false);
   assert.equal(hasMapCoordinates({ lat: null, lon: 37.62 }), false);
+});
+
+test("map converts a searched territory bbox to Leaflet bounds", () => {
+  assert.deepEqual(territoryMapBounds({
+    bbox: { minLat: 51.5402, maxLat: 51.7149, minLon: 39.0132, maxLon: 39.2031 },
+  }), [[51.5402, 39.0132], [51.7149, 39.2031]]);
+  assert.equal(territoryMapBounds({ bbox: { minLat: 52, maxLat: 51, minLon: 39, maxLon: 40 } }), null);
+  assert.equal(territoryMapBounds(null), null);
 });
 
 test("map marker status follows the selected fuel aggregation", () => {
@@ -200,11 +209,26 @@ test("map activation cancels stale hidden requests before loading the visible vi
   assert.match(activation, /deactivate\(\)/);
   assert.match(activation, /loadedBounds = null/);
   assert.match(activation, /invalidateSize\(\{ pan: false \}\)/);
-  assert.match(activation, /focusStations\(focus\)/);
+  assert.match(activation, /focusSelection\(focus\)/);
   assert.match(activation, /if \(!supportsViewportZoom\(map\.getZoom\(\)\)\) \{[\s\S]*?enterLowZoomMode\(\);[\s\S]*?return;/);
   assert.match(activation, /renderMarkers\(\{ loading: true \}\)/);
   assert.match(activation, /scheduleViewportLoad\(\{ immediate: true \}\)/);
   assert.match(source, /mergeStations\(stations\);\s+if \(deferViewportLoad\) return;/);
+});
+
+test("an empty station result focuses the searched territory instead of keeping the old map view", async () => {
+  const mapSource = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+  const appSource = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/app.js", import.meta.url),
+    "utf8",
+  ));
+
+  assert.match(appSource, /const mapFocus = \{\s+stations:[\s\S]*?location: data\.location,/);
+  assert.match(mapSource, /focusStations\(stations\)[\s\S]*?focusTerritory\(focus\?\.location\)/);
+  assert.match(mapSource, /map\.fitBounds\(bounds, \{ padding: \[34, 34\], maxZoom: 13 \}\)/);
 });
 
 test("far zoom mode clears markers only when the mode is entered", async () => {

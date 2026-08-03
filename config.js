@@ -89,6 +89,7 @@ export const config = Object.freeze({
     apiKey: process.env.DEEPSEEK_API_KEY || "",
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
     timeoutMs: positiveInteger(process.env.DEEPSEEK_TIMEOUT_MS, 60_000),
+    normalizerMaxTokens: positiveInteger(process.env.DEEPSEEK_NORMALIZER_MAX_TOKENS, 2_000),
   }),
   telegram: Object.freeze({
     enabled: disabledByDefault(process.env.TELEGRAM_POLLING_ENABLED),
