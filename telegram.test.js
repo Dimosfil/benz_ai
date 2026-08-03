@@ -126,7 +126,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       total: 3,
       withPrices: 1,
       statuses: { available: 2, maybe_available: 1 },
-      fuels: { 95: { available: 2 } },
+      fuels: { 95: { available: 2, maybe_available: 1, not_available: 0, no_data: 3 } },
     },
     warnings: [],
     build: { version: "0.1.1", shortCommit: "abcdef12", committedAt: "2026-07-11T10:30:00+03:00" },
@@ -142,7 +142,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
       lastTransactionAt: "2026-07-10T18:54:42.917Z",
     }],
   });
-  assert.match(text, /95: 2 вероятно есть/);
+  assert.match(text, /95: ✅ 2 вероятно есть · 🟡 1 возможно есть · 🔴 0 вероятно нет · ⚪ 3 нет данных/);
   assert.match(text, /Вероятно нет: 0/);
   assert.match(text, /Нет данных: 0/);
   assert.match(text, /Татнефть/);
@@ -154,6 +154,28 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
   assert.match(text, /Версия: ПО 0\.1\.1 · abcdef12 · коммит 11\.07\.2026, 10:30 МСК/);
+});
+
+test("uses correct Russian plural forms for source evidence counters", () => {
+  const text = formatTelegramSummary({
+    location: { name: "Воронеж" },
+    summary: { total: 1, withPrices: 0, statuses: { available: 1 }, fuels: {} },
+    warnings: [],
+    stations: [{
+      name: "АЗС",
+      address: "Воронеж",
+      overallStatus: "available",
+      fuelStatus: {},
+      sourceRefs: [{ source: "sber" }, { source: "gdebenz" }],
+      availabilityBySource: {
+        sber: { overallStatus: "available", operationsCount: 1 },
+        gdebenz: { overallStatus: "available", confirmations: 2 },
+      },
+    }],
+  });
+
+  assert.match(text, /1 операция/);
+  assert.match(text, /2 подтверждения/);
 });
 
 test("omits unknown commit placeholders while preserving the software version", () => {

@@ -75,7 +75,12 @@ export function formatTelegramSummary(result) {
   const statuses = summary.statuses || {};
   const fuels = Object.entries(summary.fuels || {})
     .sort(([left], [right]) => left.localeCompare(right, "ru", { numeric: true }))
-    .map(([fuel, values]) => `${fuel}: ${values.available || 0} вероятно есть`)
+    .map(([fuel, values]) => `${fuel}: ${[
+      `✅ ${values.available || 0} вероятно есть`,
+      `🟡 ${values.maybe_available || 0} возможно есть`,
+      `🔴 ${values.not_available || 0} вероятно нет`,
+      `⚪ ${values.no_data || 0} нет данных`,
+    ].join(" · ")}`)
     .slice(0, 8);
   const warnings = (result.warnings || []).filter(Boolean).slice(0, 3);
   const stations = [...(result.stations || [])]
@@ -203,10 +208,10 @@ function formatSourceEvidence(station) {
     const details = [];
     if (signal.detail) details.push(`«${signal.detail}»`);
     if (signal.operationsCount != null && Number.isFinite(Number(signal.operationsCount))) {
-      details.push(`${Number(signal.operationsCount)} операций`);
+      details.push(russianCount(signal.operationsCount, ["операция", "операции", "операций"]));
     }
     if (signal.confirmations != null && Number.isFinite(Number(signal.confirmations))) {
-      details.push(`${Number(signal.confirmations)} подтверждений`);
+      details.push(russianCount(signal.confirmations, ["подтверждение", "подтверждения", "подтверждений"]));
     }
     if (Number.isFinite(Number(signal.confidence)) && Number(signal.confidence) > 0) {
       details.push(`уверенность ${Math.round(Number(signal.confidence) * 100)}%`);
@@ -214,6 +219,21 @@ function formatSourceEvidence(station) {
     const label = statusText[signal.overallStatus]?.replace(/^[^\p{L}]+/u, "") || "нет данных";
     return `${name} — ${label}${details.length ? ` (${details.join(", ")})` : ""}`;
   }).join("; ");
+}
+
+function russianCount(value, [one, few, many]) {
+  const count = Number(value);
+  const absolute = Math.abs(Math.trunc(count));
+  const lastTwo = absolute % 100;
+  const last = absolute % 10;
+  const form = lastTwo >= 11 && lastTwo <= 14
+    ? many
+    : last === 1
+      ? one
+      : last >= 2 && last <= 4
+        ? few
+        : many;
+  return `${count} ${form}`;
 }
 
 function formatObservedAt(value) {
