@@ -42,6 +42,70 @@ test("stream snapshots update one cached station when its preferred name changes
   assert.equal(identityIndex.get("source:multigo:station-98"), originalKey);
 });
 
+test("final summary reconciliation preserves stations already streamed to the map", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(
+    new URL("./public/station-map.js", import.meta.url),
+    "utf8",
+  ));
+  const showStations = source.match(/function showStations\(stations,[\s\S]*?\) \{([\s\S]*?)\n  \}\n\n  function deactivate/)?.[1] || "";
+
+  assert.match(showStations, /if \(!preserveStations\) \{[\s\S]*?stationCache\.clear\(\)/);
+  assert.match(showStations, /renderMarkers\(\);\s+if \(preserveStations\) return;/);
+});
+
+test("map cache does not duplicate one Multigo station when its raw id changes", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  const base = {
+    source: "multigo",
+    name: "АЗС №36701",
+    address: "г. Воронеж, ул. Холмистая, 62",
+    lat: 51.66784421,
+    lon: 39.12648797,
+  };
+
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    ...base,
+    sourceRefs: [{ source: "multigo", externalId: "old" }],
+  }]);
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    ...base,
+    sourceRefs: [{ source: "multigo", externalId: "new" }],
+  }]);
+
+  assert.equal(cache.size, 1);
+  assert.equal(identityIndex.get("source:multigo:old"), identityIndex.get("source:multigo:new"));
+});
+
+test("map cache merges address variants but keeps neighbouring stations separate", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "Лукойл",
+    address: "ул. Холмистая, 62",
+    lat: 51.66801835,
+    lon: 39.12682576,
+    sourceRefs: [{ source: "tbank", externalId: "bank" }],
+  }]);
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "АЗС №36701",
+    address: "г. Воронеж, ул. Холмистая, 62",
+    lat: 51.66784421,
+    lon: 39.12648797,
+    sourceRefs: [{ source: "multigo", externalId: "catalog" }],
+  }, {
+    name: "Газпромнефть",
+    address: "ул. Героев Сибиряков, 2",
+    lat: 51.66759632,
+    lon: 39.12542242,
+    sourceRefs: [{ source: "gdebenz", externalId: "other" }],
+  }]);
+
+  assert.equal(cache.size, 2);
+});
+
 test("partial stream snapshots preserve prices from the full summary", () => {
   const cache = new Map();
   const identityIndex = new Map();

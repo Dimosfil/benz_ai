@@ -96,12 +96,12 @@ export function withTimeout(promise, timeoutMs, label, onTimeout = () => {}) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function boundedProviderCall(factory, label = "ожидание данных", externalSignal = null) {
+function boundedProviderCall(factory, label = "ожидание данных", externalSignal = null, timeoutMs = config.viewportProviderTimeoutMs) {
   const controller = new AbortController();
   const abort = () => controller.abort(externalSignal?.reason || new Error(`${label}: клиент отключился`));
   if (externalSignal?.aborted) abort();
   else externalSignal?.addEventListener("abort", abort, { once: true });
-  return withTimeout(factory(controller.signal), config.viewportProviderTimeoutMs, label, () => {
+  return withTimeout(factory(controller.signal), timeoutMs, label, () => {
     controller.abort(new Error(`${label}: запрос отменён`));
   }).finally(() => externalSignal?.removeEventListener("abort", abort));
 }
@@ -141,14 +141,17 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   if (saved) return { ...saved, cached: true };
 
   const providerFactories = [
-    (signal) => fetchTbank(bbox, { signal }),
-    () => alfaProviderCall(bbox),
-    () => fetchSber(sberWorker, bbox),
-    (signal) => fetchBenzup(bbox, { signal }),
-    (signal) => fetchGdebenz(bbox, { signal }),
-    (signal) => fetchMultigo(bbox, { signal }),
+    ["T-Bank", (signal) => fetchTbank(bbox, { signal })],
+    ["Alfa AZS", () => alfaProviderCall(bbox)],
+    ["Sber AZS", () => fetchSber(sberWorker, bbox), config.sber.summaryTimeoutMs],
+    ["BenzUp", (signal) => fetchBenzup(bbox, { signal })],
+    ["ГдеБЕНЗ", (signal) => fetchGdebenz(bbox, { signal })],
+    ["Multigo", (signal) => fetchMultigo(bbox, { signal })],
   ];
-  const providerPromises = providerFactories.map((factory) => viewport ? boundedProviderCall(factory) : factory());
+  const providerTimeoutMs = viewport ? config.viewportProviderTimeoutMs : config.summaryProviderTimeoutMs;
+  const providerPromises = providerFactories.map(([source, factory, summaryTimeoutMs]) => (
+    boundedProviderCall(factory, `ожидание ${source}`, null, viewport ? providerTimeoutMs : summaryTimeoutMs || providerTimeoutMs)
+  ));
   const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled(providerPromises);
   const tbank = fulfilled(tbankResult);
   const alfa = fulfilled(alfaResult);
@@ -188,7 +191,7 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   const merged = mergeStations(stations);
   const yandex = viewport
     ? { stations: merged, eligible: merged.filter(isYandexVerificationCandidate).length, attempted: 0, checked: 0, warning: null, skipped: true }
-    : await enrichYandexPrices(merged);
+    : await enrichYandexPrices(merged, { timeoutMs: config.yandex.summaryTimeoutMs });
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
@@ -276,7 +279,7 @@ async function searchStations(bbox, { mode = "full" } = {}) {
       },
     },
   };
-  if (!value.warnings.length) writeBoundedCache(resultCache, key, value, config.resultCacheMaxEntries);
+  writeBoundedCache(resultCache, key, value, config.resultCacheMaxEntries);
   return { ...value, cached: false };
 }
 
@@ -321,7 +324,14 @@ async function streamViewportStations(res, bbox) {
   const key = JSON.stringify(bbox);
   const saved = readFreshCache(viewportStreamCache, key, config.resultCacheTtlMs);
   if (saved) {
-    res.end(`${JSON.stringify({ stations: saved, completed: 1, total: 1, complete: true, cached: true })}\n`);
+    res.end(`${JSON.stringify({
+      stations: saved.stations,
+      completed: 1,
+      total: 1,
+      complete: true,
+      cached: true,
+      failedSources: saved.failedSources,
+    })}\n`);
     return;
   }
 
@@ -347,7 +357,10 @@ async function streamViewportStations(res, bbox) {
   } finally {
     res.off("close", abortStream);
   }
-  if (!finalFailures.length) writeBoundedCache(viewportStreamCache, key, finalStations, config.resultCacheMaxEntries);
+  writeBoundedCache(viewportStreamCache, key, {
+    stations: finalStations,
+    failedSources: finalFailures,
+  }, config.resultCacheMaxEntries);
   if (!res.destroyed) res.end();
 }
 
@@ -371,12 +384,20 @@ function validLocationQuery(value) {
   return query;
 }
 
+function publicLocation(location) {
+  const { boundary, ...value } = location;
+  return value;
+}
+
+async function locationFor(query) {
+  return publicLocation(await geocodeLocation(validLocationQuery(query)));
+}
+
 async function summaryFor(query) {
   const location = await geocodeLocation(validLocationQuery(query));
   const result = await searchStations(location.bbox);
   const stations = result.stations.filter((station) => inGeoBoundary(station, location.boundary));
-  const { boundary, ...publicLocation } = location;
-  return { ...result, stations, location: publicLocation, summary: summarizeStations(stations) };
+  return { ...result, stations, location: publicLocation(location), summary: summarizeStations(stations) };
 }
 
 export function startServer(port = config.port, host = config.host) {
@@ -401,6 +422,11 @@ export function startServer(port = config.port, host = config.host) {
   const server = createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || "/", "http://localhost");
+      if (requestUrl.pathname === "/api/location") {
+        if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
+        if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });
+        return json(res, 200, await locationFor(requestUrl.searchParams.get("q")));
+      }
       if (requestUrl.pathname === "/api/summary") {
         if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
         if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });

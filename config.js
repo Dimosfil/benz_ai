@@ -19,6 +19,7 @@ export const config = Object.freeze({
   resultCacheTtlMs: 2 * 60_000,
   resultCacheMaxEntries: positiveInteger(process.env.RESULT_CACHE_MAX_ENTRIES, 32),
   providerAreaCacheMaxEntries: positiveInteger(process.env.PROVIDER_AREA_CACHE_MAX_ENTRIES, 64),
+  summaryProviderTimeoutMs: positiveInteger(process.env.SUMMARY_PROVIDER_TIMEOUT_MS, 8_000),
   viewportProviderTimeoutMs: positiveInteger(process.env.VIEWPORT_PROVIDER_TIMEOUT_MS, 12_000),
   requestRateLimit: Object.freeze({
     windowMs: positiveInteger(process.env.REQUEST_RATE_WINDOW_MS, 60_000),
@@ -63,6 +64,7 @@ export const config = Object.freeze({
     maxActiveAreas: positiveInteger(process.env.SBER_MAX_ACTIVE_AREAS, 10),
     browserIdleMs: positiveInteger(process.env.SBER_BROWSER_IDLE_MS, 30_000),
     requestTimeoutMs: positiveInteger(process.env.SBER_REQUEST_TIMEOUT_MS, 12_000),
+    summaryTimeoutMs: positiveInteger(process.env.SBER_SUMMARY_TIMEOUT_MS, 2_000),
   }),
   yandex: Object.freeze({
     enabled: enabledByDefault(process.env.ENABLE_YANDEX_PRICES),
@@ -70,6 +72,7 @@ export const config = Object.freeze({
     cacheTtlMs: 15 * 60_000,
     cacheMaxEntries: positiveInteger(process.env.YANDEX_CACHE_MAX_ENTRIES, 1000),
     timeoutMs: 15_000,
+    summaryTimeoutMs: positiveInteger(process.env.YANDEX_SUMMARY_TIMEOUT_MS, 4_000),
     concurrency: 3,
   }),
   gdebenz: Object.freeze({
@@ -89,6 +92,7 @@ export const config = Object.freeze({
     apiKey: process.env.DEEPSEEK_API_KEY || "",
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
     timeoutMs: positiveInteger(process.env.DEEPSEEK_TIMEOUT_MS, 60_000),
+    normalizerTimeoutMs: positiveInteger(process.env.LOCATION_NORMALIZER_TIMEOUT_MS, 2_000),
     normalizerMaxTokens: positiveInteger(process.env.DEEPSEEK_NORMALIZER_MAX_TOKENS, 2_000),
   }),
   telegram: Object.freeze({

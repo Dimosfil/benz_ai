@@ -108,6 +108,18 @@ test("still merges records for the same station from different providers", () =>
   assert.equal(stationSources(result[0]), "T‑Bank Fuel + Multigo");
 });
 
+test("merges city-prefixed and short address variants for one station", () => {
+  const bank = station("tbank", "one", 51.66801835, 39.12682576, "Лукойл");
+  bank.address = "ул. Холмистая, 62";
+  const catalog = station("multigo", "two", 51.66784421, 39.12648797, "АЗС №36701");
+  catalog.address = "г. Воронеж, ул. Холмистая, 62";
+
+  const result = mergeStations([bank, catalog]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].sourceRefs.length, 2);
+});
+
 test("does not merge different neighbouring stations from separate providers", () => {
   const first = station("tbank", "one", 55, 37, "АЗС А");
   first.address = "Северная сторона трассы";
@@ -190,7 +202,7 @@ test("keeps only Multigo fuel places inside the requested territory", () => {
     { id: "outside", name: "АЗС", loc: [52, 40], fuels: [], subCategory: { name: "АЗС" } },
     { id: "electric", name: "ЭлЗС", loc: [51.61, 39.21], fuels: [], subCategory: { name: "ЭлЗС" } },
   ], bbox);
-  assert.deepEqual(result.stations.map((item) => item.externalId), ["inside"]);
+  assert.deepEqual(result.stations.map((item) => item.multigo.rawExternalId), ["inside"]);
   assert.equal(result.droppedOutside, 1);
   assert.equal(result.droppedElectric, 1);
 });

@@ -4,6 +4,30 @@ import { inBbox } from "../domain/stations.js";
 
 const cache = new Map();
 
+function identityPart(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]/giu, "");
+}
+
+export function multigoStationIdentity(station) {
+  const rawExternalId = String(station.id || "");
+  if (!rawExternalId) return "";
+  const lat = Number(station.loc?.[0]);
+  const lon = Number(station.loc?.[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+  const category = station.subCategory?.name || station.category?.name || "";
+  return [
+    "place",
+    lat.toFixed(5),
+    lon.toFixed(5),
+    identityPart(station.address),
+    identityPart(station.name || category),
+  ].join(":");
+}
+
 export function clearMultigoCache() {
   cache.clear();
 }
@@ -39,7 +63,8 @@ export function selectMultigoStations(rows, bbox) {
 }
 
 export function normalizeMultigoStation(station) {
-  const externalId = String(station.id || "");
+  const rawExternalId = String(station.id || "");
+  const externalId = multigoStationIdentity(station);
   const category = station.subCategory?.name || station.category?.name || null;
   const rawFuels = Array.isArray(station.fuels) ? station.fuels : [];
   return {
@@ -62,6 +87,7 @@ export function normalizeMultigoStation(station) {
     yandexOrgId: null,
     links: {},
     multigo: {
+      rawExternalId,
       status: station.status || null,
       category,
       fuels: rawFuels,

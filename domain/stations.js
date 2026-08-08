@@ -68,7 +68,14 @@ function stationNameKey(value) {
 function stationAddressKey(value) {
   const normalized = String(value || "")
     .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
     .replace(/^россия\s*,?\s*/u, "")
+    .replace(/^г(?:ород)?\.?\s+[^,]+,\s*/u, "")
+    .replace(/^[^,\d]+,\s*(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/(?:улица|ул\.?)(?=\s|,|$)/gu, "ул")
+    .replace(/(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект")
+    .replace(/(\d+)\s*-?\s*(?:го|й|я|е)(?=\s|,|$)/gu, "$1")
     .replace(/[^a-zа-я0-9]/giu, "");
   return new Set(["", "адрес", "адреснеуказан"]).has(normalized) ? "" : normalized;
 }

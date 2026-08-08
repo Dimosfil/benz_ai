@@ -458,16 +458,37 @@ function filteredStations() {
 async function loadSummary({ refresh = false, activateMap = false } = {}) {
   const protectUserLocation = initialSummaryLoad;
   initialSummaryLoad = false;
+  let progressiveMapStarted = false;
   findButton.disabled = true;
   refreshButton.disabled = true;
   meta.textContent = refresh ? "Очищаем кэш и заново опрашиваем источники…" : "Определяем территорию и собираем АЗС…";
   notice.hidden = true;
+  if (activateMap) setActiveTab("map");
+  mapSection.hidden = false;
   try {
+    const locationQuery = encodeURIComponent(locationInput.value.trim());
     const path = refresh ? "/api/cache/refresh" : "/api/summary";
-    const data = await fetchJson(`${path}?q=${encodeURIComponent(locationInput.value.trim())}`, { method: refresh ? "POST" : "GET" });
+    const capture = (promise) => promise.then((data) => ({ data }), (error) => ({ error }));
+    let summaryRequest;
+    if (!refresh) summaryRequest = capture(fetchJson(`${path}?q=${locationQuery}`));
+    const locationResult = await capture(fetchJson(`/api/location?q=${locationQuery}`));
+    if (locationResult.data) {
+      const progressiveFocus = { stations: [], location: locationResult.data };
+      if (mapPanel.hidden) pendingMapFocus = progressiveFocus;
+      stationMap.showStations([], {
+        fit: !mapPanel.hidden,
+        protectUserLocation,
+        focus: progressiveFocus,
+        deferViewportLoad: mapPanel.hidden,
+      });
+      progressiveMapStarted = true;
+      meta.textContent = "Территория определена · АЗС появляются по мере ответа источников…";
+    }
+    summaryRequest ||= capture(fetchJson(`${path}?q=${locationQuery}`, { method: "POST" }));
+    const summaryResult = await summaryRequest;
+    if (summaryResult.error) throw summaryResult.error;
+    const data = summaryResult.data;
     allStations = data.stations;
-    if (activateMap) setActiveTab("map");
-    mapSection.hidden = false;
     renderSummary(data);
     renderStations();
     const matches = filteredStations();
@@ -477,10 +498,11 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     };
     if (mapPanel.hidden) pendingMapFocus = mapFocus;
     stationMap.showStations(allStations, {
-      fit: !mapPanel.hidden,
+      fit: !mapPanel.hidden && !progressiveMapStarted,
       protectUserLocation,
       focus: mapFocus,
       deferViewportLoad: mapPanel.hidden,
+      preserveStations: progressiveMapStarted,
     });
     const messages = nonSourceWarnings(data.warnings, data.sources);
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
@@ -488,7 +510,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     notice.textContent = messages.join(" ");
   } catch (error) {
     allStations = [];
-    stationMap.clear();
+    if (!progressiveMapStarted) stationMap.clear();
     overview.hidden = true;
     summaryDetails.hidden = true;
     statusLegend.hidden = true;
@@ -498,7 +520,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     notice.hidden = false;
     notice.textContent = error instanceof Error ? error.message : "Не удалось получить сводку.";
     count.textContent = "—";
-    meta.textContent = "Сводка не получена";
+    meta.textContent = progressiveMapStarted ? "Карта загружена частично · сводка не получена" : "Сводка не получена";
   } finally {
     findButton.disabled = false;
     refreshButton.disabled = false;

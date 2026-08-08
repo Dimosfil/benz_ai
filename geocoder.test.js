@@ -42,7 +42,40 @@ test("accepts the corrected settlement after a city prefix", async () => {
   }
 });
 
-test("uses LLM normalization before accepting an ambiguous raw geocoder result", async () => {
+test("accepts a contextual administrative result without waiting for LLM normalization", async () => {
+  const previousFetch = globalThis.fetch;
+  clearGeocoderCache();
+  globalThis.fetch = async () => Response.json([{
+    name: "Советский",
+    display_name: "Советский, Бобровский район, Воронежская область, Россия",
+    type: "hamlet",
+    addresstype: "hamlet",
+    lat: "50.8849",
+    lon: "40.2103",
+    boundingbox: ["50.8649", "50.9049", "40.1903", "40.2303"],
+  }, {
+    name: "Советский район",
+    display_name: "Советский район, Воронеж, городской округ Воронеж, Воронежская область, Россия",
+    type: "administrative",
+    addresstype: "city_district",
+    lat: "51.6278",
+    lon: "39.1141",
+    boundingbox: ["51.5402", "51.7149", "39.0132", "39.2031"],
+  }]);
+  let normalizerCalled = false;
+  try {
+    const location = await geocodeLocation("Воронеж Советский", {
+      normalizeQuery: async () => { normalizerCalled = true; return null; },
+    });
+    assert.equal(location.name, "Советский район");
+    assert.equal(normalizerCalled, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    clearGeocoderCache();
+  }
+});
+
+test("uses LLM normalization after an ambiguous raw geocoder result", async () => {
   const previousFetch = globalThis.fetch;
   clearGeocoderCache();
   const requestedQueries = [];
@@ -59,8 +92,8 @@ test("uses LLM normalization before accepting an ambiguous raw geocoder result",
       boundingbox: ["51.5402", "51.7149", "39.0132", "39.2031"],
       geojson: null,
     }] : [{
-      name: "Советский",
-      display_name: "Советский, Бобровский район, Воронежская область, Россия",
+      name: "Советская",
+      display_name: "Советская, Бобровский район, Воронежская область, Россия",
       type: "hamlet",
       addresstype: "hamlet",
       lat: "50.8849",
@@ -77,7 +110,10 @@ test("uses LLM normalization before accepting an ambiguous raw geocoder result",
       }),
     });
     assert.equal(location.name, "Советский район");
-    assert.deepEqual(requestedQueries, ["Советский район, Воронеж, Воронежская область, Россия"]);
+    assert.deepEqual(requestedQueries, [
+      "Воронеж Советский",
+      "Советский район, Воронеж, Воронежская область, Россия",
+    ]);
   } finally {
     globalThis.fetch = previousFetch;
     clearGeocoderCache();
@@ -104,7 +140,7 @@ test("does not trust an LLM place name that Nominatim cannot verify", async () =
     }]);
   };
   try {
-    const location = await geocodeLocation("Воронеж", {
+    const location = await geocodeLocation("Воронеш", {
       normalizeQuery: async () => ({
         query: "Несуществующий район, Воронеж, Россия",
         placeName: "Несуществующий район",

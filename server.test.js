@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { normalizeGdebenzStation } from "./providers/gdebenz.js";
-import { normalizeMultigoStation } from "./providers/multigo.js";
+import { multigoStationIdentity, normalizeMultigoStation } from "./providers/multigo.js";
 import { chromeArguments, SberBrowserWorker } from "./providers/sber-browser.js";
 import { clearYandexCache, enrichYandexPrices } from "./providers/yandex.js";
+import { clearGeocoderCache } from "./services/geocoder.js";
 import { alfaProviderCall, isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices, readBbox, startServer, withTimeout } from "./server.js";
 
 test("does not call Alfa when the provider is disabled", async () => {
@@ -96,6 +97,41 @@ test("serves hardened HTTP headers and rejects writes to static files", async ()
     assert.ok(Number(head.headers.get("content-length")) > 0);
     assert.equal(await head.text(), "");
   } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await server.waitForCleanup();
+  }
+});
+
+test("returns a public location before station aggregation starts", async () => {
+  const nativeFetch = globalThis.fetch;
+  clearGeocoderCache();
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith("https://nominatim.openstreetmap.org/")) {
+      return Response.json([{
+        name: "Воронеж",
+        display_name: "Воронеж, городской округ Воронеж, Воронежская область, Россия",
+        type: "administrative",
+        addresstype: "city",
+        lat: "51.6608",
+        lon: "39.2003",
+        boundingbox: ["51.50", "51.85", "39.00", "39.40"],
+        geojson: { type: "Polygon", coordinates: [[[39, 51], [40, 51], [40, 52], [39, 51]]] },
+      }]);
+    }
+    return nativeFetch(url, options);
+  };
+  const server = startServer(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const response = await nativeFetch(`http://127.0.0.1:${server.address().port}/api/location?q=${encodeURIComponent("Воронеж")}`);
+    const location = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(location.name, "Воронеж");
+    assert.equal(location.boundary, undefined);
+    assert.deepEqual(location.bbox, { minLat: 51.5, maxLat: 51.85, minLon: 39, maxLon: 39.4 });
+  } finally {
+    globalThis.fetch = nativeFetch;
+    clearGeocoderCache();
     await new Promise((resolve) => server.close(resolve));
     await server.waitForCleanup();
   }
@@ -235,11 +271,32 @@ test("normalizes a Multigo place without claiming fuel availability", () => {
     fuels: [],
     __dist: 620,
   });
-  assert.equal(station.externalId, "m1");
+  assert.equal(station.externalId, multigoStationIdentity({
+    id: "m1",
+    name: "ЭлЗС",
+    loc: [55.75, 37.61],
+    address: "Москва",
+    subCategory: { name: "ЭлЗС" },
+  }));
+  assert.equal(station.multigo.rawExternalId, "m1");
   assert.equal(station.lat, 55.75);
   assert.equal(station.overallStatus, "no_data");
   assert.deepEqual(station.availabilityBySource, {});
   assert.equal(station.multigo.distanceMeters, 620);
+});
+
+test("keeps a stable Multigo identity when the provider rotates its raw id", () => {
+  const base = {
+    name: "АЗС №36701",
+    loc: [51.66784421, 39.12648797],
+    address: "г. Воронеж, ул. Холмистая, 62",
+    subCategory: { name: "АЗС" },
+  };
+  const first = normalizeMultigoStation({ ...base, id: "old-session-id" });
+  const second = normalizeMultigoStation({ ...base, id: "new-session-id" });
+
+  assert.equal(first.externalId, second.externalId);
+  assert.notEqual(first.multigo.rawExternalId, second.multigo.rawExternalId);
 });
 
 test("checks only probable-availability stations with a Yandex card", () => {
@@ -275,6 +332,33 @@ test("Yandex cache stores only Yandex enrichment, not an old station snapshot", 
     assert.equal(second.stations[0].prices.DT.value, 75);
     assert.equal(second.stations[0].prices["95"].value, 70.5);
     assert.equal(second.stations[0].prices["92"], undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    clearYandexCache();
+  }
+});
+
+test("stops Yandex enrichment at the summary time budget", async () => {
+  const previousFetch = globalThis.fetch;
+  clearYandexCache();
+  globalThis.fetch = async (_url, { signal }) => new Promise((resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  const station = {
+    name: "АЗС",
+    overallStatus: "available",
+    yandexOrgId: "slow-card",
+    availabilityBySource: { tbank: { overallStatus: "available" } },
+    sourceRefs: [{ source: "tbank", externalId: "one" }],
+  };
+
+  try {
+    const startedAt = Date.now();
+    const result = await enrichYandexPrices([station], { timeoutMs: 10 });
+    assert.ok(Date.now() - startedAt < 500);
+    assert.equal(result.checked, 0);
+    assert.equal(result.skipped, true);
+    assert.match(result.warning, /чтобы не задерживать сводку/);
   } finally {
     globalThis.fetch = previousFetch;
     clearYandexCache();

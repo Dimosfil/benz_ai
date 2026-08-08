@@ -41,6 +41,9 @@ test("activates and focuses the map for an explicit search", async () => {
   assert.match(app, /loadSummary\(\{ activateMap: true \}\)/);
   assert.match(app, /const mapFocus = \{\s+stations: matches\.length \? matches : allStations,\s+location: data\.location,/);
   assert.match(app, /focus: mapFocus/);
+  assert.match(app, /fetchJson\(`\/api\/location\?q=\$\{locationQuery\}`\)/);
+  assert.match(app, /preserveStations: progressiveMapStarted/);
+  assert.ok(app.indexOf("stationMap.showStations([], {") < app.indexOf("const summaryResult = await summaryRequest"));
 });
 
 test("expands the table view across the workspace", async () => {

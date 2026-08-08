@@ -1,7 +1,7 @@
 import { createDeepSeekProvider } from "../providers/deepseek.js";
 import { config } from "../config.js";
 
-const defaultProvider = createDeepSeekProvider();
+const defaultProvider = createDeepSeekProvider({ timeoutMs: config.deepseek.normalizerTimeoutMs });
 
 function parseJsonObject(value) {
   const text = String(value || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");

@@ -72,6 +72,20 @@ function exactPlaceNameMatch(item, placeName) {
   return normalizedPlaceName(item?.name) === normalizedPlaceName(placeName);
 }
 
+function contextualAdministrativeMatch(results, candidate) {
+  const generic = new Set(["россия", "область", "район", "город", "городской", "округ", "край", "республика"]);
+  const words = String(candidate || "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .match(/[a-zа-я0-9]{3,}/giu)?.filter((word) => !generic.has(word)) || [];
+  if (words.length < 2) return null;
+  return results.find((item) => {
+    if (item?.type !== "administrative" && !["city_district", "administrative", "municipality", "state", "region", "county"].includes(item?.addresstype)) return false;
+    const displayName = String(item.display_name || "").toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+    return words.every((word) => displayName.includes(word));
+  }) || null;
+}
+
 async function requestPlaces(query) {
   return schedule(async () => {
     const url = new URL(config.geocoder.url);
@@ -105,22 +119,26 @@ async function requestPlaces(query) {
 async function geocodeUncached(query, key, generation, normalizeQuery) {
   let found;
   let fallback;
-  let normalized;
-  try { normalized = await normalizeQuery(query); }
-  catch { normalized = null; }
-
-  if (normalized) {
-    const results = await requestPlaces(normalized.query);
-    found = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
-  }
 
   for (const candidate of geocoderQueryCandidates(query)) {
     if (found) break;
-    if (normalized && candidate.toLocaleLowerCase("ru-RU") === normalized.query.toLocaleLowerCase("ru-RU")) continue;
     const results = await requestPlaces(candidate);
     const exact = results.find((item) => exactCandidateMatch(item, candidate));
-    if (exact) { found = exact; break; }
+    const contextual = contextualAdministrativeMatch(results, candidate);
+    if (contextual || exact) { found = contextual || exact; break; }
     fallback ||= results[0];
+  }
+
+  if (!found) {
+    let normalized;
+    try { normalized = await normalizeQuery(query); }
+    catch { normalized = null; }
+    if (normalized && !geocoderQueryCandidates(query).some((candidate) => (
+      candidate.toLocaleLowerCase("ru-RU") === normalized.query.toLocaleLowerCase("ru-RU")
+    ))) {
+      const results = await requestPlaces(normalized.query);
+      found = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
+    }
   }
   found ||= fallback;
   if (!found) throw new Error(`Не удалось найти «${query}» в России`);

@@ -152,6 +152,63 @@ function stationSourceIdentityKeys(station) {
     .map((ref) => `source:${ref.source}:${String(ref.externalId)}`);
 }
 
+function mapIdentityText(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е");
+}
+
+function mapStationNameKey(value) {
+  return mapIdentityText(value).replace(/[^a-zа-я0-9]/giu, "");
+}
+
+function mapStationAddressKey(value) {
+  const normalized = mapIdentityText(value)
+    .replace(/^россия\s*,?\s*/u, "")
+    .replace(/^г(?:ород)?\.?\s+[^,]+,\s*/u, "")
+    .replace(/^[^,\d]+,\s*(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/(?:улица|ул\.?)(?=\s|,|$)/gu, "ул")
+    .replace(/(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект")
+    .replace(/(\d+)\s*-?\s*(?:го|й|я|е)(?=\s|,|$)/gu, "$1")
+    .replace(/[^a-zа-я0-9]/giu, "");
+  return new Set(["", "адрес", "адреснеуказан"]).has(normalized) ? "" : normalized;
+}
+
+function mapStationValues(station, property, aliases) {
+  return [station?.[property], ...(station?.[aliases] || [])].filter(Boolean);
+}
+
+function mapStationDistance(left, right) {
+  const radians = (value) => value * Math.PI / 180;
+  const dLat = radians(Number(right.lat) - Number(left.lat));
+  const dLon = radians(Number(right.lon) - Number(left.lon));
+  const value = Math.sin(dLat / 2) ** 2
+    + Math.cos(radians(Number(left.lat))) * Math.cos(radians(Number(right.lat))) * Math.sin(dLon / 2) ** 2;
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function mapStationsShareProvider(left, right) {
+  const rightSources = new Set((right.sourceRefs || []).map((ref) => ref.source));
+  return (left.sourceRefs || []).some((ref) => rightSources.has(ref.source));
+}
+
+export function isSameCachedStation(left, right) {
+  if (!hasMapCoordinates(left) || !hasMapCoordinates(right)) return false;
+  const distance = mapStationDistance(left, right);
+  const leftAddresses = new Set(mapStationValues(left, "address", "addressAliases").map(mapStationAddressKey).filter(Boolean));
+  const sameAddress = mapStationValues(right, "address", "addressAliases")
+    .map(mapStationAddressKey).some((address) => address && leftAddresses.has(address));
+  if (mapStationsShareProvider(left, right)) return distance <= 5 && sameAddress;
+  const leftNames = new Set(mapStationValues(left, "name", "nameAliases").map(mapStationNameKey).filter(Boolean));
+  const sameName = mapStationValues(right, "name", "nameAliases")
+    .map(mapStationNameKey).some((name) => name && leftNames.has(name));
+  return distance <= 15
+    || (distance <= 40 && (sameName || sameAddress))
+    || (distance <= 150 && sameName && sameAddress);
+}
+
 function stationCacheKey(station) {
   const sourceKey = stationSourceIdentityKeys(station)[0];
   if (sourceKey) return sourceKey;
@@ -168,7 +225,9 @@ export function mergeStationCache(stationCache, identityIndex, stationKeys, stat
     const existingKey = identities
       .map((identity) => identityIndex.get(identity))
       .find((key) => key && stationCache.has(key));
-    const key = existingKey || stationCacheKey(station);
+    const physicalKey = existingKey ? null : [...stationCache.entries()]
+      .find(([, candidate]) => isSameCachedStation(candidate, station))?.[0];
+    const key = existingKey || physicalKey || stationCacheKey(station);
     const previous = stationCache.get(key);
     const previousPriceTime = Date.parse(previous?.priceUpdatedAt);
     const incomingPriceTime = Date.parse(station.priceUpdatedAt);
@@ -692,15 +751,18 @@ export function createStationMap({ container, message, count }) {
     protectUserLocation = false,
     focus = stations,
     deferViewportLoad = false,
+    preserveStations = false,
   } = {}) {
     if (protectUserLocation && userLocated) {
       if (!deferViewportLoad) scheduleViewportLoad({ immediate: true });
       return;
     }
     lowZoomMode = false;
-    loadedBounds = null;
-    stationCache.clear();
-    stationIdentityIndex.clear();
+    if (!preserveStations) {
+      loadedBounds = null;
+      stationCache.clear();
+      stationIdentityIndex.clear();
+    }
     mergeStations(stations);
     if (deferViewportLoad) return;
     map.invalidateSize({ pan: false });
@@ -710,6 +772,7 @@ export function createStationMap({ container, message, count }) {
       return;
     }
     renderMarkers();
+    if (preserveStations) return;
     if (focused) {
       // The moveend event schedules loading for the newly focused viewport.
     } else {
