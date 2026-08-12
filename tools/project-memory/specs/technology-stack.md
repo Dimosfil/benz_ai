@@ -31,7 +31,7 @@
 | ГдеБЕНЗ | Crowdsourced availability, queues and limits | User-triggered request with 60-second cache |
 | Multigo | Nearby fuel-category place catalog | POST request with 60-second cache; does not assert fuel availability |
 | Telegram Bot API | Secondary client interface for the shared fuel-search workflow | Optional server-side bot token and long polling |
-| DeepSeek | Prepared server-side AI adapter for future bot workflows | Optional API key; not called by current search |
+| LM Studio / OpenAI-compatible LLM | Primary server-side territory-query normalization before geocoding | Local Qwen through native `/api/v1/chat`, or authenticated OpenAI-compatible endpoint |
 | PostgreSQL | Optional persistent web and Telegram usage analytics | Private `DATABASE_URL`; idempotent application-managed schema |
 
 ## Commands

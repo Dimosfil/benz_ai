@@ -12,6 +12,12 @@ function disabledByDefault(value) {
 }
 
 const yandexLimit = Number(process.env.YANDEX_PRICE_LIMIT || 0);
+const llmBaseUrl = process.env.LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
+const llmApiKey = Object.hasOwn(process.env, "LLM_API_KEY")
+  ? process.env.LLM_API_KEY || ""
+  : process.env.DEEPSEEK_API_KEY || "";
+const llmModel = process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-chat";
+const llmAllowUnauthenticated = disabledByDefault(process.env.LLM_ALLOW_UNAUTHENTICATED);
 
 export const config = Object.freeze({
   host: process.env.HOST || "0.0.0.0",
@@ -88,12 +94,16 @@ export const config = Object.freeze({
     limit: 100,
   }),
   deepseek: Object.freeze({
-    baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-    apiKey: process.env.DEEPSEEK_API_KEY || "",
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
-    timeoutMs: positiveInteger(process.env.DEEPSEEK_TIMEOUT_MS, 60_000),
-    normalizerTimeoutMs: positiveInteger(process.env.LOCATION_NORMALIZER_TIMEOUT_MS, 2_000),
-    normalizerMaxTokens: positiveInteger(process.env.DEEPSEEK_NORMALIZER_MAX_TOKENS, 2_000),
+    enabled: Boolean(llmBaseUrl && llmModel && (llmApiKey || llmAllowUnauthenticated)),
+    baseUrl: llmBaseUrl,
+    apiKey: llmApiKey,
+    model: llmModel,
+    apiMode: process.env.LLM_API_MODE || "openai-compatible",
+    jsonMode: process.env.LLM_JSON_MODE || "json_object",
+    allowUnauthenticated: llmAllowUnauthenticated,
+    timeoutMs: positiveInteger(process.env.LLM_TIMEOUT_MS || process.env.DEEPSEEK_TIMEOUT_MS, 60_000),
+    normalizerTimeoutMs: positiveInteger(process.env.LLM_NORMALIZER_TIMEOUT_MS || process.env.LOCATION_NORMALIZER_TIMEOUT_MS, 60_000),
+    normalizerMaxTokens: positiveInteger(process.env.LLM_NORMALIZER_MAX_TOKENS || process.env.DEEPSEEK_NORMALIZER_MAX_TOKENS, 512),
   }),
   telegram: Object.freeze({
     enabled: disabledByDefault(process.env.TELEGRAM_POLLING_ENABLED),

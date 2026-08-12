@@ -16,6 +16,7 @@ import { SberBrowserWorker } from "./providers/sber-browser.js";
 import { fetchTbank } from "./providers/tbank.js";
 import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
+import { llmNormalizerStatus } from "./services/location-query-normalizer.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { TelegramPollingGateway } from "./services/telegram-gateway.js";
 import { AnalyticsService } from "./services/analytics.js";
@@ -468,6 +469,7 @@ export function startServer(port = config.port, host = config.host) {
           sberWorker: sberWorker.status(),
           telegram: telegramGateway.status(),
           analytics: analytics.status(),
+          llm: llmNormalizerStatus(),
         });
       }
       if (requestUrl.pathname === "/api/admin/stats") {

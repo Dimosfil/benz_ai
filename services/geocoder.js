@@ -119,9 +119,18 @@ async function requestPlaces(query) {
 async function geocodeUncached(query, key, generation, normalizeQuery) {
   let found;
   let fallback;
+  let normalized;
+
+  try { normalized = await normalizeQuery(query); }
+  catch { normalized = null; }
+  if (normalized) {
+    const results = await requestPlaces(normalized.query);
+    found = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
+  }
 
   for (const candidate of geocoderQueryCandidates(query)) {
     if (found) break;
+    if (normalized && candidate.toLocaleLowerCase("ru-RU") === normalized.query.toLocaleLowerCase("ru-RU")) continue;
     const results = await requestPlaces(candidate);
     const exact = results.find((item) => exactCandidateMatch(item, candidate));
     const contextual = contextualAdministrativeMatch(results, candidate);
@@ -129,17 +138,6 @@ async function geocodeUncached(query, key, generation, normalizeQuery) {
     fallback ||= results[0];
   }
 
-  if (!found) {
-    let normalized;
-    try { normalized = await normalizeQuery(query); }
-    catch { normalized = null; }
-    if (normalized && !geocoderQueryCandidates(query).some((candidate) => (
-      candidate.toLocaleLowerCase("ru-RU") === normalized.query.toLocaleLowerCase("ru-RU")
-    ))) {
-      const results = await requestPlaces(normalized.query);
-      found = results.find((item) => exactPlaceNameMatch(item, normalized.placeName) && regionMatches(item, normalized.query));
-    }
-  }
   found ||= fallback;
   if (!found) throw new Error(`Не удалось найти «${query}» в России`);
 

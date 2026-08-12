@@ -42,7 +42,7 @@ test("accepts the corrected settlement after a city prefix", async () => {
   }
 });
 
-test("accepts a contextual administrative result without waiting for LLM normalization", async () => {
+test("calls LLM before accepting a contextual administrative result", async () => {
   const previousFetch = globalThis.fetch;
   clearGeocoderCache();
   globalThis.fetch = async () => Response.json([{
@@ -68,7 +68,7 @@ test("accepts a contextual administrative result without waiting for LLM normali
       normalizeQuery: async () => { normalizerCalled = true; return null; },
     });
     assert.equal(location.name, "Советский район");
-    assert.equal(normalizerCalled, false);
+    assert.equal(normalizerCalled, true);
   } finally {
     globalThis.fetch = previousFetch;
     clearGeocoderCache();
@@ -110,10 +110,7 @@ test("uses LLM normalization after an ambiguous raw geocoder result", async () =
       }),
     });
     assert.equal(location.name, "Советский район");
-    assert.deepEqual(requestedQueries, [
-      "Воронеж Советский",
-      "Советский район, Воронеж, Воронежская область, Россия",
-    ]);
+    assert.deepEqual(requestedQueries, ["Советский район, Воронеж, Воронежская область, Россия"]);
   } finally {
     globalThis.fetch = previousFetch;
     clearGeocoderCache();
