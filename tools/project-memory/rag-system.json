@@ -2,6 +2,68 @@
   "version": 1,
   "project_id": "replace-with-stable-project-slug",
   "mode": "hybrid-ready",
+  "code_intelligence": {
+    "enabled": false,
+    "provider": "repowise",
+    "project_path": ".",
+    "allow_external_project_path": false,
+    "transport": {
+      "kind": "mcp-stdio",
+      "command": "repowise",
+      "args": [
+        "mcp",
+        "{project_path}",
+        "--transport",
+        "stdio"
+      ],
+      "environment_variables": [],
+      "protocol_version": "2025-06-18"
+    },
+    "allowed_tools": [
+      "get_context",
+      "get_symbol",
+      "get_risk",
+      "get_health"
+    ],
+    "capabilities": {
+      "context": { "tool": "get_context", "argument": "targets", "argument_type": "array" },
+      "symbol": { "tool": "get_symbol", "argument": "query" },
+      "risk": { "tool": "get_risk", "argument": "targets", "argument_type": "array" },
+      "health": { "tool": "get_health", "argument": "targets", "argument_type": "array" }
+    },
+    "routing": {
+      "default_route": "project_memory",
+      "combined_route": "federated",
+      "fallback_sources": ["project_memory", "source_files"],
+      "routes": [
+        {
+          "id": "project_memory",
+          "sources": ["project_memory"],
+          "terms": [
+            "requirement", "business rule", "workflow", "decision", "specification", "policy", "runbook",
+            "требование", "бизнес-правило", "процесс", "решение", "спецификация"
+          ],
+          "path_extensions": [".md", ".json"]
+        },
+        {
+          "id": "code_intelligence",
+          "sources": ["code_intelligence"],
+          "terms": [
+            "symbol", "caller", "callee", "call graph", "dependency", "blast radius", "code health", "dead code",
+            "символ", "вызывает", "зависимость", "риск изменения", "здоровье кода"
+          ],
+          "path_extensions": [".cs", ".py", ".js", ".ts", ".tsx", ".java", ".go", ".rs", ".cpp", ".h"]
+        }
+      ]
+    },
+    "freshness": {
+      "require_indexed_commit": true,
+      "warn_on_dirty_worktree": true,
+      "reject_stale": false
+    },
+    "timeouts": { "request_seconds": 30 },
+    "generated_paths": [".repowise/"]
+  },
   "source_groups": [
     {
       "id": "local-instructions",

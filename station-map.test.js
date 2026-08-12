@@ -106,6 +106,74 @@ test("map cache merges address variants but keeps neighbouring stations separate
   assert.equal(cache.size, 2);
 });
 
+test("map cache merges nearby street-order and house-suffix variants", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "Движение",
+    address: "Воронеж, Острогожская улица, 111",
+    lat: 51.574105,
+    lon: 39.14416,
+    sourceRefs: [{ source: "tbank", externalId: "bank" }],
+  }, {
+    name: "АЗС Газпром",
+    address: "Воронеж, проспект Патриотов, 60Б",
+    lat: 51.649218,
+    lon: 39.093884,
+    sourceRefs: [{ source: "tbank", externalId: "other-site" }],
+  }]);
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "кААЗС",
+    address: "г. Воронеж ул. Острогожская, 111",
+    lat: 51.5739291,
+    lon: 39.14448559,
+    sourceRefs: [{ source: "multigo", externalId: "catalog" }],
+  }, {
+    name: "АЗС №131",
+    address: "г. Воронеж, пр-т Патриотов, 60",
+    lat: 51.64905543,
+    lon: 39.09384013,
+    sourceRefs: [{ source: "multigo", externalId: "catalog-suffix" }],
+  }]);
+
+  assert.equal(cache.size, 2);
+});
+
+test("map cache merges close differently-labelled and route-kilometre duplicates", () => {
+  const cache = new Map();
+  const identityIndex = new Map();
+  const stationKeys = new WeakMap();
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "Лм-газ",
+    address: "Семилукский район, Девицкое сельское поселение",
+    lat: 51.653078,
+    lon: 39.041885,
+    sourceRefs: [{ source: "tbank", externalId: "bank-close" }],
+  }, {
+    name: "Лукойл",
+    address: "Р-298, 210-й километр, 1",
+    lat: 51.64492,
+    lon: 39.022522,
+    sourceRefs: [{ source: "tbank", externalId: "bank-route" }],
+  }]);
+  mergeStationCache(cache, identityIndex, stationKeys, [{
+    name: "АГЗС",
+    address: "Р298, 213 км, слева, г. Семилуки",
+    lat: 51.6531293,
+    lon: 39.04210567,
+    sourceRefs: [{ source: "multigo", externalId: "catalog-close" }],
+  }, {
+    name: "АЗС №36723",
+    address: "Р298, 210 км, справа, г. Семилуки",
+    lat: 51.64472495,
+    lon: 39.02213924,
+    sourceRefs: [{ source: "multigo", externalId: "catalog-route" }],
+  }]);
+
+  assert.equal(cache.size, 2);
+});
+
 test("partial stream snapshots preserve prices from the full summary", () => {
   const cache = new Map();
   const identityIndex = new Map();

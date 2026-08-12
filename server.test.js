@@ -6,7 +6,7 @@ import { multigoStationIdentity, normalizeMultigoStation } from "./providers/mul
 import { chromeArguments, SberBrowserWorker } from "./providers/sber-browser.js";
 import { clearYandexCache, enrichYandexPrices } from "./providers/yandex.js";
 import { clearGeocoderCache } from "./services/geocoder.js";
-import { alfaProviderCall, isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelPrices, readBbox, startServer, withTimeout } from "./server.js";
+import { alfaProviderCall, isYandexVerificationCandidate, mergeStations, normalizeBenzupStation, normalizeFuelName, normalizeSberStation, parseYandexFuelAvailability, parseYandexFuelPrices, readBbox, startServer, withTimeout } from "./server.js";
 
 test("does not call Alfa when the provider is disabled", async () => {
   let called = false;
@@ -195,6 +195,28 @@ test("extracts Yandex prices and ignores a dash", () => {
   assert.equal(result.updatedAt, "10 июля 2026");
 });
 
+test("extracts current Yandex fuel availability, queue and confirmations", () => {
+  const now = Date.parse("2026-08-12T15:00:00.000Z");
+  const html = `<div class="gas-station-fuel-card-view _wide">
+    <div class="gas-station-fuel-card-view__title">Топливо в наличии · Большая очередь</div>
+    <div class="gas-station-fuel-card-view__chips">
+      <span class="gas-station-fuel-card-view__chip _uncertain"><span class="gas-station-fuel-card-view__chip-label">92</span></span>
+      <span class="gas-station-fuel-card-view__chip"><span class="gas-station-fuel-card-view__chip-label">95</span></span>
+      <span class="gas-station-fuel-card-view__chip _uncertain"><span class="gas-station-fuel-card-view__chip-label">ДТ</span></span>
+    </div>
+    <div class="gas-station-fuel-card-view__confirmations">На основе 3 подтверждений за час<br/>Обновлено 28 мин назад</div>
+  </div><div class="orgpage-header-view__moved"></div>`;
+
+  const result = parseYandexFuelAvailability(html, now);
+
+  assert.equal(result.overallStatus, "available");
+  assert.deepEqual(result.fuelStatus, { 92: "maybe_available", 95: "available", DT: "maybe_available" });
+  assert.equal(result.queueStatus, "high");
+  assert.equal(result.queueLabel, "Большая очередь");
+  assert.equal(result.confirmations, 3);
+  assert.equal(result.observedAt, "2026-08-12T14:32:00.000Z");
+});
+
 test("normalizes a BenzUp-compatible station payload", () => {
   const station = normalizeBenzupStation({
     id: 7,
@@ -299,14 +321,14 @@ test("keeps a stable Multigo identity when the provider rotates its raw id", () 
   assert.notEqual(first.multigo.rawExternalId, second.multigo.rawExternalId);
 });
 
-test("checks only probable-availability stations with a Yandex card", () => {
+test("checks every station with a Yandex card, including disputed negatives", () => {
   assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: "123" }), true);
   assert.equal(isYandexVerificationCandidate({
     overallStatus: "maybe_available",
     yandexOrgId: "123",
     availabilityBySource: { tbank: { overallStatus: "available", fuelStatus: {} } },
   }), true);
-  assert.equal(isYandexVerificationCandidate({ overallStatus: "maybe_available", yandexOrgId: "123" }), false);
+  assert.equal(isYandexVerificationCandidate({ overallStatus: "not_available", yandexOrgId: "123" }), true);
   assert.equal(isYandexVerificationCandidate({ overallStatus: "available", yandexOrgId: null }), false);
 });
 

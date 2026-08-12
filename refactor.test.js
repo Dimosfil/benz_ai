@@ -120,6 +120,49 @@ test("merges city-prefixed and short address variants for one station", () => {
   assert.equal(result[0].sourceRefs.length, 2);
 });
 
+test("merges prefix and suffix street forms for one nearby station", () => {
+  const bank = station("tbank", "one", 51.574105, 39.14416, "Движение");
+  bank.address = "Воронеж, Острогожская улица, 111";
+  const catalog = station("multigo", "two", 51.5739291, 39.14448559, "кААЗС");
+  catalog.address = "г. Воронеж ул. Острогожская, 111";
+
+  assert.equal(mergeStations([bank, catalog]).length, 1);
+});
+
+test("merges a nearby catalog point when only the house suffix differs", () => {
+  const bank = station("tbank", "one", 51.649218, 39.093884, "АЗС Газпром");
+  bank.address = "Воронеж, проспект Патриотов, 60Б";
+  const catalog = station("multigo", "two", 51.64905543, 39.09384013, "АЗС №131");
+  catalog.address = "г. Воронеж, пр-т Патриотов, 60";
+
+  assert.equal(mergeStations([bank, catalog]).length, 1);
+});
+
+test("merges differently labelled provider points within 25 metres", () => {
+  const bank = station("tbank", "one", 51.653078, 39.041885, "Лм-газ");
+  bank.address = "Семилукский район, Девицкое сельское поселение";
+  const catalog = station("multigo", "two", 51.6531293, 39.04210567, "АГЗС");
+  catalog.address = "Р298, 213 км, слева, г. Семилуки";
+
+  assert.equal(mergeStations([bank, catalog]).length, 1);
+});
+
+test("merges nearby route addresses written as kilometre variants", () => {
+  const bank = station("tbank", "one", 51.64492, 39.022522, "Лукойл");
+  bank.address = "Р-298, 210-й километр, 1";
+  const catalog = station("multigo", "two", 51.64472495, 39.02213924, "АЗС №36723");
+  catalog.address = "Р298, 210 км, справа, г. Семилуки";
+
+  assert.equal(mergeStations([bank, catalog]).length, 1);
+});
+
+test("merges two same-provider records at the exact physical point", () => {
+  const first = station("tbank", "one", 51.65137, 39.03975, "Газпромнефть");
+  const second = station("tbank", "two", 51.65137, 39.03975, "Газпром");
+
+  assert.equal(mergeStations([first, second]).length, 1);
+});
+
 test("does not merge different neighbouring stations from separate providers", () => {
   const first = station("tbank", "one", 55, 37, "АЗС А");
   first.address = "Северная сторона трассы";
@@ -154,8 +197,8 @@ test("downgrades matching positive sources when their observations are older tha
   assert.equal(merged.fuelStatus["92"], "maybe_available");
 });
 
-test("uses a bank payment from seven minutes ago as a strong station-level confirmation", () => {
-  const observedAt = new Date(Date.now() - 7 * 60_000).toISOString();
+test("uses a bank payment younger than 30 minutes as a strong station-level confirmation", () => {
+  const observedAt = new Date(Date.now() - 29 * 60_000).toISOString();
   const bank = station("alfa", "fresh-payment", 55, 37, "АЗС");
   bank.availabilityBySource = {
     alfa: {
@@ -171,6 +214,45 @@ test("uses a bank payment from seven minutes ago as a strong station-level confi
   assert.equal(merged.fuelStatus["92"], "maybe_available");
   assert.equal(merged.fuelStatus["95"], "maybe_available");
   assert.equal(merged.fuelStatus["98"], "not_available");
+});
+
+test("downgrades a lone bank payment older than 30 minutes", () => {
+  const observedAt = new Date(Date.now() - 31 * 60_000).toISOString();
+  const bank = station("sber", "older-payment", 55, 37, "АЗС");
+  bank.availabilityBySource = {
+    sber: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+  };
+
+  const [merged] = mergeStations([bank]);
+
+  assert.equal(merged.overallStatus, "maybe_available");
+  assert.equal(merged.fuelStatus["92"], "maybe_available");
+});
+
+test("uses recent corroborated Yandex availability over conflicting negative feeds", () => {
+  const observedAt = new Date(Date.now() - 28 * 60_000).toISOString();
+  const bank = station("tbank", "bank-negative", 51.69258, 39.377016, "Газпром");
+  bank.availabilityBySource = {
+    tbank: { overallStatus: "not_available", fuelStatus: { 92: "not_available", 95: "not_available" }, observedAt },
+  };
+  const yandex = station("yandex", "38745431337", 51.69258, 39.377016, "Газпром");
+  yandex.availabilityBySource = {
+    yandex: {
+      overallStatus: "available",
+      fuelStatus: { 92: "maybe_available", 95: "available" },
+      observedAt,
+      confirmations: 3,
+      queueStatus: "high",
+      queueLabel: "Большая очередь",
+    },
+  };
+
+  const [merged] = mergeStations([bank, yandex]);
+
+  assert.equal(merged.overallStatus, "available");
+  assert.equal(merged.fuelStatus["92"], "maybe_available");
+  assert.equal(merged.fuelStatus["95"], "available");
+  assert.equal(merged.availabilityBySource.yandex.queueStatus, "high");
 });
 
 test("keeps a price paired with the newest publication time", () => {

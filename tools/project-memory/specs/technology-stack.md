@@ -26,7 +26,7 @@
 | T-Bank Fuel | Stations and probabilistic availability | Public, undocumented endpoint |
 | Alfa AZS | Nationwide station snapshot, probabilistic availability and prices | Public, undocumented endpoint with in-memory HTTP cookie challenge |
 | BenzUp | Station catalog and prices | Bearer token |
-| Yandex Maps | Price-card check for probable-availability stations | HTML lookup by T-Bank Yandex card ID; does not confirm fuel stock |
+| Yandex Maps | Availability, queue and price-card verification | HTML lookup by T-Bank Yandex card ID; recent corroborated reports can override conflicting feeds |
 | Sber AZS | Station catalog and availability | JSON verified in Chromium session; direct requests receive JS challenge |
 | ГдеБЕНЗ | Crowdsourced availability, queues and limits | User-triggered request with 60-second cache |
 | Multigo | Nearby fuel-category place catalog | POST request with 60-second cache; does not assert fuel availability |

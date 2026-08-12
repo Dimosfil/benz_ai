@@ -246,6 +246,25 @@ enabled retrieval layers, and expected source paths in top keyword, semantic,
 or hybrid results. Test retrieval evidence first; do not use a model's
 free-form answer wording as the primary eval target.
 
+## Optional Code Intelligence
+
+Keep project memory authoritative for requirements, workflows, decisions,
+business rules, exact project metadata, and durable notes. For deeper symbol,
+call/dependency, Git-risk, or code-health evidence, configure the optional
+`code_intelligence` section in `rag-system.json` and use:
+
+```powershell
+python .\tools\project-memory\code_intelligence.py status
+python .\tools\project-memory\code_intelligence.py route "who calls this symbol?"
+python .\tools\project-memory\code_intelligence.py invoke context MySymbol
+```
+
+Keep the provider disabled until it is separately installed, indexed, and
+verified. Only allowlist read-only MCP tools, keep generated indexes ignored,
+and verify provider results against current source. Repowise is the first
+tested adapter, not a hard dependency. Follow
+`patterns/CODE_INTELLIGENCE_ADAPTERS.md`.
+
 ## Activation Limits And Diagnostics
 
 Start with Markdown specifications and targeted search. Use generated databases
@@ -294,6 +313,8 @@ count, index path, freshness caveats, and readiness.
 - `retrieval-evals.json` or `semantic-retrieval-evals.md`: small eval set for
   keyword, semantic, and hybrid retrieval quality.
 - `rag_check.py`: optional health and retrieval eval runner.
+- `code_intelligence.py`: optional provider-neutral MCP bridge for symbol,
+  dependency, risk, and health evidence.
 - `build_chroma_index.py`: optional local Chroma adapter when semantic
   retrieval is enabled.
 - `NOTES.md`: reviewable export of durable notes from local agent memory.

@@ -14,13 +14,13 @@ import { clearMultigoCache, fetchMultigo } from "./providers/multigo.js";
 import { fetchSber, normalizeSberStation } from "./providers/sber.js";
 import { SberBrowserWorker } from "./providers/sber-browser.js";
 import { fetchTbank } from "./providers/tbank.js";
-import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelPrices } from "./providers/yandex.js";
+import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { TelegramPollingGateway } from "./services/telegram-gateway.js";
 import { AnalyticsService } from "./services/analytics.js";
 
-export { mergeStations, normalizeBenzupStation, normalizeSberStation, isYandexVerificationCandidate, parseYandexFuelPrices };
+export { mergeStations, normalizeBenzupStation, normalizeSberStation, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices };
 export { normalizeFuelName } from "./domain/stations.js";
 
 const PUBLIC_DIR = join(process.cwd(), "public");
@@ -192,11 +192,12 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   const yandex = viewport
     ? { stations: merged, eligible: merged.filter(isYandexVerificationCandidate).length, attempted: 0, checked: 0, warning: null, skipped: true }
     : await enrichYandexPrices(merged, { timeoutMs: config.yandex.summaryTimeoutMs });
+  const finalStations = mergeStations(yandex.stations);
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
     build: buildInfo,
-    stations: yandex.stations,
+    stations: finalStations,
     warnings: warnings.filter(Boolean),
     sourceRequests: {
       tbank: tbank?.requests || 0,
@@ -247,7 +248,7 @@ async function searchStations(bbox, { mode = "full" } = {}) {
       yandex: {
         available: config.yandex.enabled && yandex.checked > 0,
         configured: config.yandex.enabled,
-        role: "price_verification",
+        role: "availability_queue_and_prices",
         skipped: Boolean(yandex.skipped),
         eligible: yandex.eligible,
         attempted: yandex.attempted,
@@ -502,6 +503,7 @@ export function startServer(port = config.port, host = config.host) {
       if (error.code === "ENOENT") return json(res, 404, { error: "Не найдено" });
       if (error.code === "GEOCODER_BUSY") return json(res, 503, { error: "Сервис поиска временно перегружен. Повторите позже" });
       const clientError = /^(Введите|Не удалось найти|Параметр |Некорректные границы|Слишком большая область|Координаты карты)/u.test(String(error.message || ""));
+      if (!clientError) console.error(`Request failed for ${requestUrl.pathname}:`, error);
       json(res, clientError ? 400 : 500, { error: clientError ? error.message : "Внутренняя ошибка сервера" });
     }
   }).listen(port, host, () => {

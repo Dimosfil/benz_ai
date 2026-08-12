@@ -161,6 +161,13 @@ temporary scripts after use and retain only necessary evidence or outputs.
 - Do not revert user changes unless explicitly requested.
 - Treat dirty worktrees as normal.
 - Keep changes scoped to the current task.
+- Never add, stage, commit, or push model weights or checkpoints, photos,
+  video, audio, datasets, archives, or similar large binary content. Keep such
+  payloads in project-approved artifact or object storage and commit only
+  compact manifests, source URLs, checksums, or retrieval instructions. Before
+  staging, inspect untracked and unusually large files. Do not remove already
+  tracked content or rewrite history without explicit approval for the exact
+  content and project-specific Git storage or cleanup approach.
 - Ask before destructive operations, broad formatting-only churn, dependency
   replacements, data migrations, public API or storage contract changes, or
   unrelated scope expansion.

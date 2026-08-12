@@ -122,6 +122,13 @@
 - Generated files policy: do not commit local databases, logs, caches, build
   outputs, screenshots, raw exports, or one-off artifacts unless a project-local
   contract explicitly requires a compact manifest or checked-in asset.
+- Never add, stage, commit, or push model weights or checkpoints, photos,
+  video, audio, datasets, archives, or similar large binary content. Store them
+  in project-approved artifact or object storage and commit only compact
+  manifests, source URLs, checksums, or retrieval instructions. Inspect
+  untracked and unusually large files before staging. Do not remove already
+  tracked content or rewrite history without explicit approval for the exact
+  content and project-specific Git storage or cleanup approach.
 - Never commit secrets, credentials, local databases, logs, or caches.
 - Follow `tools/project-memory/git-preferences.json` for commit-message
   languages. English is primary; selected additional languages are included when

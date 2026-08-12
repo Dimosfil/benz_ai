@@ -1,11 +1,13 @@
 import {
   formatPrice,
+  hasRecentCrowdConfirmation,
   hasRecentPaymentConfirmation,
   labels,
   selectionStatus,
   stationConfidence,
   stationFuelEntries,
   stationFreshText,
+  stationQueueText,
   stationSources,
 } from "./station-view.js";
 import { filterStations } from "./station-filter.js";
@@ -166,14 +168,27 @@ function mapStationNameKey(value) {
 function mapStationAddressKey(value) {
   const normalized = mapIdentityText(value)
     .replace(/^россия\s*,?\s*/u, "")
+    .replace(/^[^,]+,\s*(?=[^,]+,\s*\d)/u, "")
+    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
     .replace(/^г(?:ород)?\.?\s+[^,]+,\s*/u, "")
     .replace(/^[^,\d]+,\s*(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
-    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/((?:\d+\s+)?[a-zа-я-]+(?:\s+[a-zа-я-]+){0,2})\s+(?:улица|ул\.?)(?=\s|,|$)/gu, "ул $1")
+    .replace(/((?:\d+\s+)?[a-zа-я-]+(?:\s+[a-zа-я-]+){0,2})\s+(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект $1")
     .replace(/(?:улица|ул\.?)(?=\s|,|$)/gu, "ул")
     .replace(/(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект")
     .replace(/(\d+)\s*-?\s*(?:го|й|я|е)(?=\s|,|$)/gu, "$1")
     .replace(/[^a-zа-я0-9]/giu, "");
   return new Set(["", "адрес", "адреснеуказан"]).has(normalized) ? "" : normalized;
+}
+
+function mapStationSiteAddressKey(value) {
+  return mapStationAddressKey(value).replace(/(\d+)[а-я]+$/u, "$1");
+}
+
+function mapStationRouteKmKey(value) {
+  const match = mapIdentityText(value)
+    .match(/(?:^|[^a-zа-я0-9])р\s*-?\s*(\d+).*?(\d+)\s*(?:-\s*)?(?:й|я|е|го)?\s*(?:км|километр)/u);
+  return match ? `р${match[1]}:${match[2]}` : "";
 }
 
 function mapStationValues(station, property, aliases) {
@@ -200,11 +215,21 @@ export function isSameCachedStation(left, right) {
   const leftAddresses = new Set(mapStationValues(left, "address", "addressAliases").map(mapStationAddressKey).filter(Boolean));
   const sameAddress = mapStationValues(right, "address", "addressAliases")
     .map(mapStationAddressKey).some((address) => address && leftAddresses.has(address));
-  if (mapStationsShareProvider(left, right)) return distance <= 5 && sameAddress;
   const leftNames = new Set(mapStationValues(left, "name", "nameAliases").map(mapStationNameKey).filter(Boolean));
   const sameName = mapStationValues(right, "name", "nameAliases")
     .map(mapStationNameKey).some((name) => name && leftNames.has(name));
-  return distance <= 15
+  const leftSites = new Set(mapStationValues(left, "address", "addressAliases").map(mapStationSiteAddressKey).filter(Boolean));
+  const sameSiteAddress = mapStationValues(right, "address", "addressAliases")
+    .map(mapStationSiteAddressKey).some((address) => address && leftSites.has(address));
+  const leftRoutes = new Set(mapStationValues(left, "address", "addressAliases").map(mapStationRouteKmKey).filter(Boolean));
+  const sameRouteKm = mapStationValues(right, "address", "addressAliases")
+    .map(mapStationRouteKmKey).some((address) => address && leftRoutes.has(address));
+  if (mapStationsShareProvider(left, right)) {
+    return distance <= 2 || (distance <= 5 && sameAddress) || (distance <= 25 && sameName && sameSiteAddress);
+  }
+  return distance <= 25
+    || (distance <= 25 && sameSiteAddress)
+    || (distance <= 40 && sameRouteKm)
     || (distance <= 40 && (sameName || sameAddress))
     || (distance <= 150 && sameName && sameAddress);
 }
@@ -285,7 +310,8 @@ function appendLink(container, href, label, className = "") {
 function popupFor(station, selectedFuels) {
   const status = stationMapStatus(station, selectedFuels);
   const recentPayment = !selectedFuels.length && hasRecentPaymentConfirmation(station);
-  const confidence = recentPayment ? null : stationConfidence(station, selectedFuels);
+  const recentCrowdConfirmation = hasRecentCrowdConfirmation(station, selectedFuels);
+  const confidence = recentPayment || recentCrowdConfirmation ? null : stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
   popup.className = `map-popup map-popup-${status}`;
 
@@ -306,10 +332,12 @@ function popupFor(station, selectedFuels) {
     text("strong", STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
   );
   statusCard.append(statusTop);
-  if (recentPayment) {
+  if (recentPayment || recentCrowdConfirmation) {
     statusCard.append(text(
       "p",
-      "Свежая банковская оплата подтверждает наличие хотя бы одного вида топлива. Статусы конкретных марок смотрите ниже.",
+      recentPayment
+        ? "Свежая банковская оплата подтверждает наличие хотя бы одного вида топлива. Статусы конкретных марок смотрите ниже."
+        : "Свежие подтверждения пользователей Яндекс Карт показывают наличие топлива. Статусы конкретных марок смотрите ниже.",
       "map-popup-status-note",
     ));
   } else if (confidence && confidence.total >= 2) {
@@ -342,6 +370,8 @@ function popupFor(station, selectedFuels) {
       ? "Источники не передали актуальные данные о наличии."
       : "Статус рассчитан по доступным сигналам агрегатора.", "map-popup-status-note"));
   }
+  const queueText = stationQueueText(station);
+  if (queueText) statusCard.append(text("p", queueText, "map-popup-detail"));
   if (station.detail) statusCard.append(text("p", station.detail, "map-popup-detail"));
   popup.append(statusCard);
 

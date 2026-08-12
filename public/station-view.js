@@ -20,7 +20,8 @@ const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeSty
 const RELIABLE_AVAILABILITY_MIN_SIGNALS = 2;
 const RELIABLE_AVAILABILITY_MIN_AGREEMENT = 80;
 const FRESH_PAYMENT_MAX_AGE_MS = 60 * 60_000;
-const RECENT_PAYMENT_CONFIRMATION_MS = 15 * 60_000;
+const RECENT_PAYMENT_CONFIRMATION_MS = 30 * 60_000;
+const RECENT_CROWD_CONFIRMATION_MS = 60 * 60_000;
 const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
 
 export function fuelName(type) {
@@ -70,7 +71,7 @@ function confidenceFromStatuses(statuses) {
 }
 
 export function selectionStatus(station, selected = []) {
-  if (!selected.length && hasRecentPaymentConfirmation(station)) return "available";
+  if ((!selected.length && hasRecentPaymentConfirmation(station)) || hasRecentCrowdConfirmation(station, selected)) return "available";
   const status = rawSelectionStatus(station, selected);
   if (status !== "available") return status;
   const statuses = sourceStatuses(station, selected);
@@ -80,6 +81,20 @@ export function selectionStatus(station, selected = []) {
     && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT
     && statuses.every((value) => value === "available");
   return reliable ? "available" : "maybe_available";
+}
+
+export function hasRecentCrowdConfirmation(station, selected = [], now = Date.now()) {
+  return Object.entries(station.availabilityBySource || {}).some(([source, signal]) => {
+    if (source !== "yandex" || Number(signal.confirmations) < 2) return false;
+    const status = selected.length
+      ? selected.map((fuel) => signal.fuelStatus?.[fuel]).filter(Boolean)
+      : [signal.overallStatus];
+    if (!status.length || status.some((value) => value !== "available")) return false;
+    const observedAt = Date.parse(signal.observedAt);
+    return Number.isFinite(observedAt)
+      && observedAt <= now + 5 * 60_000
+      && now - observedAt <= RECENT_CROWD_CONFIRMATION_MS;
+  });
 }
 
 export function hasRecentPaymentConfirmation(station, now = Date.now()) {
@@ -157,7 +172,20 @@ export function stationFreshText(station) {
       ? `⚠ Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждение устарело (${formatAge(ageMs)} назад)`
       : `Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждено ${formatAge(ageMs)} назад`
     : "Данных о последней оплате нет";
-  return station.priceUpdatedAt ? `${payment} · цены: ${station.priceUpdatedAt}` : payment;
+  const queue = stationQueueText(station);
+  const freshness = station.priceUpdatedAt ? `${payment} · цены: ${station.priceUpdatedAt}` : payment;
+  return queue ? `${queue} · ${freshness}` : freshness;
+}
+
+export function stationQueueText(station) {
+  const signals = Object.values(station.availabilityBySource || {})
+    .filter((signal) => signal.queueLabel && Number.isFinite(Date.parse(signal.observedAt)))
+    .sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt));
+  if (!signals.length) return "";
+  const signal = signals[0];
+  return signal.confirmations
+    ? `${signal.queueLabel} · ${signal.confirmations} подтверждения`
+    : signal.queueLabel;
 }
 
 function formatAge(ageMs) {

@@ -70,14 +70,29 @@ function stationAddressKey(value) {
     .toLocaleLowerCase("ru-RU")
     .replace(/ё/g, "е")
     .replace(/^россия\s*,?\s*/u, "")
+    .replace(/^[^,]+,\s*(?=[^,]+,\s*\d)/u, "")
+    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
     .replace(/^г(?:ород)?\.?\s+[^,]+,\s*/u, "")
     .replace(/^[^,\d]+,\s*(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
-    .replace(/^г(?:ород)?\.?\s+.*?(?=(?:ул(?:ица)?\.?|пр(?:оспект|-т)\.?|шоссе|пер(?:еулок)?\.?)(?:\s|$))/u, "")
+    .replace(/((?:\d+\s+)?[a-zа-я-]+(?:\s+[a-zа-я-]+){0,2})\s+(?:улица|ул\.?)(?=\s|,|$)/gu, "ул $1")
+    .replace(/((?:\d+\s+)?[a-zа-я-]+(?:\s+[a-zа-я-]+){0,2})\s+(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект $1")
     .replace(/(?:улица|ул\.?)(?=\s|,|$)/gu, "ул")
     .replace(/(?:проспект|пр-т\.?)(?=\s|,|$)/gu, "проспект")
     .replace(/(\d+)\s*-?\s*(?:го|й|я|е)(?=\s|,|$)/gu, "$1")
     .replace(/[^a-zа-я0-9]/giu, "");
   return new Set(["", "адрес", "адреснеуказан"]).has(normalized) ? "" : normalized;
+}
+
+function stationSiteAddressKey(value) {
+  return stationAddressKey(value).replace(/(\d+)[а-я]+$/u, "$1");
+}
+
+function stationRouteKmKey(value) {
+  const match = String(value || "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .match(/(?:^|[^a-zа-я0-9])р\s*-?\s*(\d+).*?(\d+)\s*(?:-\s*)?(?:й|я|е|го)?\s*(?:км|километр)/u);
+  return match ? `р${match[1]}:${match[2]}` : "";
 }
 
 function addressesOf(station) {
@@ -115,9 +130,18 @@ function sharesProvider(left, right) {
 
 function isCoLocatedDuplicate(left, right) {
   if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
-  if (distanceMeters(left, right) > 5) return false;
+  const distance = distanceMeters(left, right);
+  if (distance <= 2) return true;
   const leftAddresses = new Set(addressesOf(left).map(stationAddressKey).filter(Boolean));
-  return addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+  const sameAddress = addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+  if (distance <= 5 && sameAddress) return true;
+  if (distance > 25) return false;
+  const leftSites = new Set(addressesOf(left).map(stationSiteAddressKey).filter(Boolean));
+  const sameSiteAddress = addressesOf(right).map(stationSiteAddressKey)
+    .some((address) => address && leftSites.has(address));
+  const leftNames = new Set(namesOf(left).map(stationNameKey).filter(Boolean));
+  const sameName = namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
+  return sameName && sameSiteAddress;
 }
 
 function isSameStation(left, right) {
@@ -132,9 +156,17 @@ function isSameStation(left, right) {
   const sameName = namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
   const leftAddresses = new Set(addressesOf(left).map(stationAddressKey).filter(Boolean));
   const sameAddress = addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+  const leftSites = new Set(addressesOf(left).map(stationSiteAddressKey).filter(Boolean));
+  const sameSiteAddress = addressesOf(right).map(stationSiteAddressKey)
+    .some((address) => address && leftSites.has(address));
+  const leftRoutes = new Set(addressesOf(left).map(stationRouteKmKey).filter(Boolean));
+  const sameRouteKm = addressesOf(right).map(stationRouteKmKey)
+    .some((address) => address && leftRoutes.has(address));
   // Provider coordinates commonly differ by a few metres. Beyond that tolerance,
   // require identity evidence so neighbouring stations are not silently merged.
-  return distance <= 15
+  return distance <= 25
+    || (distance <= 25 && sameSiteAddress)
+    || (distance <= 40 && sameRouteKm)
     || (distance <= 40 && (sameName || sameAddress))
     || (distance <= 150 && sameName && sameAddress);
 }
@@ -145,9 +177,16 @@ function isCorroboratedOrphanDuplicate(left, right) {
   const rightSources = new Set(refsOf(right).map((ref) => ref.source));
   if (leftSources.size < 2 && rightSources.size < 2) return false;
   if (![left.lat, left.lon, right.lat, right.lon].every(Number.isFinite)) return false;
-  if (distanceMeters(left, right) > 40) return false;
+  const distance = distanceMeters(left, right);
+  if (distance > 40) return false;
   const leftNames = new Set(namesOf(left).map(stationNameKey).filter(Boolean));
-  return namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
+  const sameName = namesOf(right).map(stationNameKey).some((name) => name && leftNames.has(name));
+  const leftAddresses = new Set(addressesOf(left).map(stationAddressKey).filter(Boolean));
+  const sameAddress = addressesOf(right).map(stationAddressKey).some((address) => address && leftAddresses.has(address));
+  const leftSites = new Set(addressesOf(left).map(stationSiteAddressKey).filter(Boolean));
+  const sameSiteAddress = addressesOf(right).map(stationSiteAddressKey)
+    .some((address) => address && leftSites.has(address));
+  return sameName || sameAddress || (distance <= 25 && sameSiteAddress);
 }
 
 function aggregateStatuses(values) {
@@ -164,8 +203,10 @@ function reliableAggregateStatus(values) {
 }
 
 const AVAILABLE_SIGNAL_MAX_AGE_MS = 60 * 60_000;
-const RECENT_PAYMENT_CONFIRMATION_MS = 15 * 60_000;
+const RECENT_PAYMENT_CONFIRMATION_MS = 30 * 60_000;
+const RECENT_CROWD_CONFIRMATION_MS = 60 * 60_000;
 const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
+const CONFIRMED_CROWD_SOURCES = new Set(["yandex"]);
 
 function freshnessAwareStatus(signal, fuel = null, now = Date.now()) {
   const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
@@ -185,6 +226,17 @@ function hasRecentPaymentConfirmation(availabilityBySource, now = Date.now()) {
     return Number.isFinite(observedAt)
       && observedAt <= now + 5 * 60_000
       && now - observedAt <= RECENT_PAYMENT_CONFIRMATION_MS;
+  });
+}
+
+function hasRecentCrowdConfirmation(availabilityBySource, fuel = null, now = Date.now()) {
+  return Object.entries(availabilityBySource || {}).some(([source, signal]) => {
+    const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
+    if (!CONFIRMED_CROWD_SOURCES.has(source) || status !== "available" || Number(signal.confirmations) < 2) return false;
+    const observedAt = Date.parse(signal.observedAt);
+    return Number.isFinite(observedAt)
+      && observedAt <= now + 5 * 60_000
+      && now - observedAt <= RECENT_CROWD_CONFIRMATION_MS;
   });
 }
 
@@ -233,12 +285,15 @@ function recomputeAvailability(station) {
   const evidence = Object.values(station.availabilityBySource || {});
   const now = Date.now();
   station.overallStatus = hasRecentPaymentConfirmation(station.availabilityBySource, now)
+    || hasRecentCrowdConfirmation(station.availabilityBySource, null, now)
     ? "available"
     : reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, null, now)));
   const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})));
   station.fuelStatus = Object.fromEntries([...fuels].map((fuel) => [
     fuel,
-    reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, fuel, now)).filter(Boolean)),
+    hasRecentCrowdConfirmation(station.availabilityBySource, fuel, now)
+      ? "available"
+      : reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, fuel, now)).filter(Boolean)),
   ]));
   const observed = evidence.map((item) => item.observedAt).filter((value) => Number.isFinite(Date.parse(value)));
   station.lastTransactionAt = observed.length

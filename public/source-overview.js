@@ -3,6 +3,7 @@ import { sourceNames } from "./station-view.js";
 const roleNames = Object.freeze({
   availability: "Наличие топлива",
   availability_and_prices: "Наличие и цены",
+  availability_queue_and_prices: "Наличие, очередь и цены",
   prices: "Цены",
   price_verification: "Проверка цен",
   catalog: "Каталог АЗС",

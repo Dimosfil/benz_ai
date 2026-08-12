@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.08.02.2",
+  "instruction_kit_version": "2026.08.06.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
@@ -173,7 +173,9 @@
     "2026.07.14.1__require_startup_migration_auto_apply",
     "2026.07.15.1__continue_development_after_chat_secret_exposure",
     "2026.08.02.1__default_config_service_off_for_new_projects",
-    "2026.08.02.2__disambiguate_short_config_toggle_aliases"
+    "2026.08.02.2__disambiguate_short_config_toggle_aliases",
+    "2026.08.05.1__keep_model_and_media_content_out_of_git",
+    "2026.08.06.1__add_code_intelligence_adapters"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -229,7 +231,9 @@
     "patterns/AGENTS_RUNTIME/16-git-policy.md",
     "patterns/AGENTS_RUNTIME/17-agent-role-office.md",
     "patterns/AGENTS_RUNTIME/18-startup-product-engineering.md",
-    "patterns/AGENTS_RUNTIME/19-game-modding.md"
+    "patterns/AGENTS_RUNTIME/19-game-modding.md",
+    "patterns/CODE_INTELLIGENCE_ADAPTERS.md",
+    "tools/project-memory/code_intelligence.py"
   ],
-  "last_update_check_at": "2026-08-03T11:34:53+03:00"
+  "last_update_check_at": "2026-08-12T19:55:00+03:00"
 }

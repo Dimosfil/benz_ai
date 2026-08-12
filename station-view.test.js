@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   selectionStatus,
+  hasRecentCrowdConfirmation,
   hasRecentPaymentConfirmation,
   stationConfidence,
   stationFreshText,
   stationFuelEntries,
   stationLastPaymentAt,
+  stationQueueText,
   minimumPrice,
 } from "./public/station-view.js";
 
@@ -100,8 +102,8 @@ test("turns matching but two-hour-old positive signals yellow", () => {
   assert.equal(selectionStatus(station, ["92"]), "maybe_available");
 });
 
-test("uses a bank payment from seven minutes ago as a green station confirmation", () => {
-  const observedAt = new Date(Date.now() - 7 * 60_000).toISOString();
+test("uses a bank payment younger than 30 minutes as a green station confirmation", () => {
+  const observedAt = new Date(Date.now() - 29 * 60_000).toISOString();
   const station = {
     overallStatus: "maybe_available",
     fuelStatus: { 92: "available", 95: "maybe_available", 98: "not_available" },
@@ -110,9 +112,50 @@ test("uses a bank payment from seven minutes ago as a green station confirmation
     },
   };
 
+  assert.equal(hasRecentPaymentConfirmation(station, Date.parse(observedAt) + 30 * 60_000), true);
   assert.equal(hasRecentPaymentConfirmation(station), true);
   assert.equal(selectionStatus(station), "available");
   assert.equal(selectionStatus(station, ["95"]), "maybe_available");
+});
+
+test("turns a lone bank payment older than 30 minutes yellow", () => {
+  const observedAt = new Date(Date.now() - 31 * 60_000).toISOString();
+  const station = {
+    overallStatus: "available",
+    fuelStatus: { 92: "available" },
+    availabilityBySource: {
+      sber: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+    },
+  };
+
+  assert.equal(hasRecentPaymentConfirmation(station), false);
+  assert.equal(selectionStatus(station), "maybe_available");
+});
+
+test("shows recent corroborated Yandex availability and queue", () => {
+  const observedAt = new Date(Date.now() - 28 * 60_000).toISOString();
+  const station = {
+    overallStatus: "available",
+    fuelStatus: { 92: "maybe_available", 95: "available" },
+    availabilityBySource: {
+      tbank: { overallStatus: "not_available", fuelStatus: { 92: "not_available", 95: "not_available" }, observedAt },
+      yandex: {
+        overallStatus: "available",
+        fuelStatus: { 92: "maybe_available", 95: "available" },
+        observedAt,
+        confirmations: 3,
+        queueStatus: "high",
+        queueLabel: "Большая очередь",
+      },
+    },
+  };
+
+  assert.equal(hasRecentCrowdConfirmation(station), true);
+  assert.equal(hasRecentCrowdConfirmation(station, ["95"]), true);
+  assert.equal(hasRecentCrowdConfirmation(station, ["92"]), false);
+  assert.equal(selectionStatus(station), "available");
+  assert.equal(selectionStatus(station, ["95"]), "available");
+  assert.equal(stationQueueText(station), "Большая очередь · 3 подтверждения");
 });
 
 test("keeps a 50 percent signal yellow", () => {
