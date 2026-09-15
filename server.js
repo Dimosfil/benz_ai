@@ -20,6 +20,10 @@ import { llmNormalizerStatus } from "./services/location-query-normalizer.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
 import { TelegramPollingGateway } from "./services/telegram-gateway.js";
 import { AnalyticsService } from "./services/analytics.js";
+import { YooKassaClient } from "./providers/yookassa.js";
+import { PaymentStore } from "./services/payment-store.js";
+import { SubscriptionPayments } from "./services/subscription-payments.js";
+import { SubscriptionMenu } from "./services/subscription-menu.js";
 
 export { mergeStations, normalizeBenzupStation, normalizeSberStation, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices };
 export { normalizeFuelName } from "./domain/stations.js";
@@ -406,6 +410,11 @@ export function startServer(port = config.port, host = config.host) {
   const analytics = new AnalyticsService(config.analytics);
   void analytics.start();
   const botHandler = createBenzTelegramHandler({
+    subscriptionMenu: new SubscriptionMenu(new SubscriptionPayments({
+      settings: config.subscription,
+      client: new YooKassaClient(config.subscription),
+      store: new PaymentStore(config.subscription.dataFile),
+    })),
     buildInfo,
     findSummary: summaryFor,
     refreshSummary: async (query) => {
@@ -415,7 +424,7 @@ export function startServer(port = config.port, host = config.host) {
     },
   });
   const telegramGateway = new TelegramPollingGateway(async (message) => {
-    void analytics.recordTelegram(message);
+    if (!message.callbackData) void analytics.recordTelegram(message);
     return botHandler(message);
   }, { ...config.telegram, ...TELEGRAM_BOT_PROFILE });
   if (config.telegram.enabled && !telegramGateway.isConfigured()) {
@@ -468,6 +477,7 @@ export function startServer(port = config.port, host = config.host) {
           build: buildInfo,
           sberWorker: sberWorker.status(),
           telegram: telegramGateway.status(),
+          payments: { enabled: config.subscription.enabled, testOnly: true },
           analytics: analytics.status(),
           llm: llmNormalizerStatus(),
         });

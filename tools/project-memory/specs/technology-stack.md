@@ -11,6 +11,7 @@
 | Map UI | Leaflet 1.9.4 and Leaflet.markercluster 1.5.3 loaded from pinned CDN URLs; browser Geolocation API; bounded viewport bbox loading; OpenStreetMap tiles | `public/index.html`, `public/station-map.js`, `server.js` |
 | Browser integration | Headless Chrome/Edge via Chrome DevTools Protocol | `providers/sber-browser.js` |
 | Telegram interface | Telegram Bot API long polling over built-in Fetch API | `services/telegram-gateway.js`, `services/telegram-bot.js` |
+| Test subscription payments | YooKassa REST API via built-in Fetch; private atomic JSON order storage with one process owner | `providers/yookassa.js`, `services/subscription-payments.js`, `services/payment-store.js` |
 | Analytics storage | PostgreSQL through `pg`; privacy-preserving event hashes and aggregate admin reporting | `services/analytics.js`, `tools/project-memory/specs/analytics.md` |
 | Package manager | npm | `package.json` |
 | Tests | Node.js test runner | `npm test` |
@@ -31,6 +32,7 @@
 | ГдеБЕНЗ | Crowdsourced availability, queues and limits | User-triggered request with 60-second cache |
 | Multigo | Nearby fuel-category place catalog | POST request with 60-second cache; does not assert fuel availability |
 | Telegram Bot API | Secondary client interface for the shared fuel-search workflow | Optional server-side bot token and long polling |
+| YooKassa test shop | Test checkout and verified subscription record | Server-side test credentials; no real-money mode; `docs/yookassa-testing.md` |
 | LM Studio / OpenAI-compatible LLM | Primary server-side territory-query normalization before geocoding | Local Qwen through native `/api/v1/chat`, or authenticated OpenAI-compatible endpoint |
 | PostgreSQL | Optional persistent web and Telegram usage analytics | Private `DATABASE_URL`; idempotent application-managed schema |
 

@@ -24,13 +24,14 @@
   Keep the user-facing output to one compact status line or include it in the
   first substantive reply. That compact status must explicitly include the
   pending migration count, including `0` when no migrations are pending.
-- For each new project session, require a clear, measurable project goal before
-  implementation begins.
-  - If no explicit project goal exists in startup artifacts or user text,
-    ask for it in the next response and pause implementation planning.
-  - Help user formulate it by asking 1-3 focused questions (target user,
-    expected outcome, success criteria).
-  - Confirm the final goal wording and continue only after confirmation.
+- Before implementation, derive the task goal and observable success criteria
+  from the user's request and relevant project context. A clear bounded fix,
+  review, or instruction edit is sufficient without a project-goal interview.
+  - Do not require the user to confirm a restatement of an already clear goal.
+  - Ask focused questions only when missing information materially changes the
+    result or scope; continue independent authorized work while waiting.
+  - For a genuinely undefined product, clarify the target user, expected outcome,
+    and success criteria before dependent implementation decisions.
 - Track the agreed goal during the thread.
   - Reference it in first planning reply and after major changes.
   - In final output, report completion status against each goal criterion and

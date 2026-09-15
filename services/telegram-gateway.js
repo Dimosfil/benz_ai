@@ -86,7 +86,7 @@ export class TelegramPollingGateway {
     const updates = await this.call("getUpdates", {
       offset: this.offset,
       timeout: this.longPollSeconds,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
     }, combinedSignal(
       this.abortController.signal,
       AbortSignal.timeout((this.longPollSeconds + 20) * 1_000),
@@ -102,20 +102,35 @@ export class TelegramPollingGateway {
   }
 
   async handleUpdate(update) {
-    const message = update?.message;
-    if (!message?.text || message?.chat?.id === undefined) return;
+    const callback = update?.callback_query;
+    const message = callback?.message || update?.message;
+    if (callback?.id) {
+      // Acknowledge before payment network calls so Telegram stops the spinner.
+      try {
+        await this.call("answerCallbackQuery", { callback_query_id: callback.id }, AbortSignal.timeout(5_000));
+      } catch {
+        // Expired callback acknowledgements must not block replay of the durable order.
+      }
+    }
+    if ((!message?.text && !callback?.data) || message?.chat?.id === undefined) return;
+    const from = callback?.from || message.from;
     const responseText = await this.handleMessage({
       chatId: String(message.chat.id),
-      userId: String(message.from?.id ?? message.chat.id),
-      username: message.from?.username ?? message.from?.first_name ?? null,
-      text: message.text,
+      userId: String(from?.id ?? message.chat.id),
+      username: from?.username ?? from?.first_name ?? null,
+      text: callback ? "" : message.text,
+      ...(message.chat.type ? { chatType: message.chat.type } : {}),
+      ...(callback ? { callbackData: callback.data } : {}),
     });
     if (responseText) {
-      for (const chunk of telegramMessageChunks(responseText)) {
+      const structured = typeof responseText === "object";
+      const chunks = telegramMessageChunks(structured ? responseText.text : responseText);
+      for (const [index, chunk] of chunks.entries()) {
         await this.call("sendMessage", {
           chat_id: String(message.chat.id),
           text: chunk,
           disable_web_page_preview: true,
+          ...(structured && responseText.replyMarkup && index === chunks.length - 1 ? { reply_markup: responseText.replyMarkup } : {}),
         }, AbortSignal.timeout(20_000));
       }
     }

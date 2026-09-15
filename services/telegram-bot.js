@@ -3,6 +3,8 @@ export const TELEGRAM_BOT_PROFILE = {
     { command: "start", description: "Как пользоваться ботом" },
     { command: "help", description: "Примеры поиска города и района" },
     { command: "refresh", description: "Обновить данные для территории" },
+    { command: "buy", description: "Купить тестовую подписку" },
+    { command: "subscription", description: "Проверить тестовую подписку" },
   ],
   description: [
     "Benz AI ищет АЗС и вероятностные данные о наличии топлива.",
@@ -29,9 +31,17 @@ const HELP_TEXT = [
   "Данные о наличии вероятностные. Веб-версия показывает полный список станций, фильтры и источники: https://daimnebenz.bothost.tech/",
 ].join("\n\n");
 
-export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary, buildInfo = null }) {
+export function createBenzTelegramHandler({ findSummary, refreshSummary = findSummary, buildInfo = null, subscriptionMenu = null }) {
   const lastRefreshByUser = new Map();
   return async function handleTelegramMessage(message) {
+    if (subscriptionMenu) {
+      const response = await subscriptionMenu.handle(message);
+      if (response) {
+        return typeof response === "object"
+          ? { ...response, text: appendBuildInfo(response.text, buildInfo) }
+          : appendBuildInfo(response, buildInfo);
+      }
+    }
     const text = String(message?.text || "").trim();
     if (!text) return null;
 

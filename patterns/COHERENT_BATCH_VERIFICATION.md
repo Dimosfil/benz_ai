@@ -43,6 +43,10 @@ state and make the next batch obvious without hiding unfinished risks.
   undoing unrelated user work or previous completed batches.
 - Run the fastest relevant checks first, then broader checks only when the risk
   or project contract requires them.
+- After sufficient checks pass, repeat or broaden them only for new changes,
+  failures, unresolved concerns, or a required project gate. Do not add tests
+  that merely mirror a reversible, low-impact edit. Follow
+  `AGENTS_RUNTIME/15-verification.md` for verification scope and stopping rules.
 - Treat `git diff --check` as a whitespace/error check, not as a substitute for
   tests or behavior verification. If it reports warnings, distinguish harmless
   line-ending warnings from actual whitespace errors.

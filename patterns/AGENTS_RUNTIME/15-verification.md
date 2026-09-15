@@ -1,5 +1,16 @@
 ## Verification
 
+Choose checks by changed behavior, affected layers, risk, and the documented
+project contract. Complete required checks, including any explicitly requested
+full test or release workflow. Use the smallest sufficient set for other tasks.
+Do not add tests for reversible, low-impact edits when they only restate the
+implementation and protect no meaningful behavior.
+
+After relevant checks pass, broaden or repeat them only for a new change,
+failure, unresolved concern, or mandatory project gate. Do not rerun unchanged
+checks merely to gain confidence. Report unavailable checks as specific
+verification gaps and continue independent authorized work.
+
 For documentation-only changes:
 
 ```powershell

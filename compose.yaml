@@ -39,6 +39,13 @@ services:
       TELEGRAM_POLLING_ENABLED: "${TELEGRAM_POLLING_ENABLED:-false}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_API_BASE_URL: "${TELEGRAM_API_BASE_URL:-https://api.telegram.org}"
+      YOOKASSA_TEST_ENABLED: "${YOOKASSA_TEST_ENABLED:-false}"
+      YOOKASSA_SHOP_ID: "${YOOKASSA_SHOP_ID:-}"
+      YOOKASSA_SECRET_KEY: "${YOOKASSA_SECRET_KEY:-}"
+      YOOKASSA_RETURN_URL: "${YOOKASSA_RETURN_URL:-}"
+      YOOKASSA_DATA_FILE: /app/data/payments/orders.json
+      SUBSCRIPTION_PRICE_RUB: "${SUBSCRIPTION_PRICE_RUB:-100.00}"
+      SUBSCRIPTION_DAYS: "${SUBSCRIPTION_DAYS:-30}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
       DEEPSEEK_MODEL: "${DEEPSEEK_MODEL:-deepseek-chat}"
@@ -70,5 +77,10 @@ services:
     tmpfs:
       - /tmp:size=512m,mode=1777
     read_only: true
+    volumes:
+      - payments:/app/data/payments
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  payments:

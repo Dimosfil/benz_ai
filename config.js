@@ -1,3 +1,5 @@
+import { loadSubscriptionConfig } from "./services/subscription-config.js";
+
 function positiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -20,6 +22,7 @@ const llmModel = process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || "deepsee
 const llmAllowUnauthenticated = disabledByDefault(process.env.LLM_ALLOW_UNAUTHENTICATED);
 
 export const config = Object.freeze({
+  subscription: loadSubscriptionConfig(),
   host: process.env.HOST || "0.0.0.0",
   port: positiveInteger(process.env.PORT, 3000),
   resultCacheTtlMs: 2 * 60_000,

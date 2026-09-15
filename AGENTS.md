@@ -15,15 +15,25 @@ Keep the app useful, small, and evidence-backed: fetch station data server-side,
 avoid browser CORS issues, clearly surface source limitations, and preserve a
 simple local run workflow.
 
+Before implementation, derive the task goal and observable success criteria
+from the user's request and relevant project context. A clear bounded task is
+sufficient; do not require a separate project-goal interview or confirmation.
+Ask focused questions only when missing information materially changes the
+result or scope, and continue independent authorized work while waiting.
+
 ## Loading Contract
 
 - Start with this file.
 - Read only the modules needed for the current request.
+- Before introducing a clarification or approval gate, apply
+  `patterns/AGENTS_RUNTIME/03-rule-precedence.md` and check existing authorization.
 - Before acting on a concrete task, select and read the matching module(s);
   this entrypoint alone is enough only for greetings or status-neutral replies.
 - Treat user wording such as "do by GI", "follow GI", "strictly by GI", and
   equivalent local-language forms as a request for strict compliance with all
-  loaded GI rules.
+  loaded GI rules. If an applicable rule cannot be followed, stop the affected
+  operation and report the concrete blocker or explicit deferral. Continue
+  independent authorized work without claiming the blocked step is complete.
 - On the first concrete task in a new chat/session, run a quiet GI update check:
   read `tools/project-memory/instruction-kit.json` and the accepted source
   `VERSION.md`/`migrations/`, then apply pending accepted migrations. Treat
@@ -137,7 +147,7 @@ npm test
 Build:
 
 ```powershell
-# No build step is currently defined.
+docker compose build
 ```
 
 ## Working Areas

@@ -1,5 +1,18 @@
 # Connected Projects And External Sources
 
+## ЮKassa / тестовая подписка
+
+- Роль: создание тестовой оплаты единственного товара Telegram-бота, проверка
+  результата через GET, сохранение тестового срока подписки.
+- API: `https://api.yookassa.ru/v3/payments`, Basic Auth, Idempotence-Key.
+- Документация: `https://yookassa.ru/developers/payment-acceptance/getting-started/quick-start`
+  и `https://yookassa.ru/developers/payment-acceptance/testing-and-going-live/testing`.
+- Контракт: `tools/project-memory/specs/subscription-payments.md`.
+- Реквизиты: только локальное окружение, test-магазин; live-ключи запрещены.
+- Проверены официальная документация и интеграция с подменённым HTTP-клиентом;
+  сквозной тест ждёт регистрации магазина и реквизитов пользователя.
+- Сторонние проекты и исходный шаблон для этой интеграции не читались.
+
 ## Telegram Bot Template / gateway logic source
 
 - Local source: `D:\AI\telegram_bot_template`.

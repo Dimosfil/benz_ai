@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Private persistent test payment orders and Telegram owner IDs
+data/payments/
+
 # Local service credentials
 .env
 .env.*

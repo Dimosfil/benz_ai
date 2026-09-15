@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.08.06.1",
+  "instruction_kit_version": "2026.09.05.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
@@ -175,7 +175,8 @@
     "2026.08.02.1__default_config_service_off_for_new_projects",
     "2026.08.02.2__disambiguate_short_config_toggle_aliases",
     "2026.08.05.1__keep_model_and_media_content_out_of_git",
-    "2026.08.06.1__add_code_intelligence_adapters"
+    "2026.08.06.1__add_code_intelligence_adapters",
+    "2026.09.05.1__scope_approval_and_verification_gates"
   ],
   "copied_files": [
     "AGENTS.md",
@@ -235,5 +236,5 @@
     "patterns/CODE_INTELLIGENCE_ADAPTERS.md",
     "tools/project-memory/code_intelligence.py"
   ],
-  "last_update_check_at": "2026-08-12T19:55:00+03:00"
+  "last_update_check_at": "2026-09-15T12:58:48+03:00"
 }

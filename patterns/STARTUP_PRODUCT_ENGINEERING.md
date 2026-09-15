@@ -102,9 +102,12 @@ clearly enough that a team can continue the work.
   explicitly approves the change.
 - Preserve user workflows, loading states, error states, accessibility,
   responsive behavior, and visual consistency with the existing design system.
-- Verify user-visible changes with the strongest practical check for the task:
+- Verify user-visible changes with checks sufficient for the affected behavior
+  and risk, including required project gates:
   unit/component tests, route/API smoke checks, browser inspection,
   screenshots, or manual interaction notes when automation is unavailable.
+- After those checks pass, expand verification only for a new change, failure,
+  unresolved concern, or mandatory gate; do not run every listed check by default.
 
 ## Communication
 
