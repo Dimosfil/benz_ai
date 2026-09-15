@@ -64,8 +64,10 @@ test("full bot flow: welcome, one product, checkout link, verified test subscrip
   const handler = createBenzTelegramHandler({ subscriptionMenu: menu, findSummary: () => { throw new Error("No search expected"); } });
   const start = await handler({ ...owner, text: "/start" });
   assert.equal(start.replyMarkup.inline_keyboard[0][0].callback_data, "sub:buy");
-  const product = await handler({ ...owner, callbackData: "sub:buy" });
-  assert.match(product.text, /100.00 ₽ за 30 дней/);
+  const plans = await handler({ ...owner, callbackData: "sub:buy" });
+  assert.match(plans.text, /17,5%/);
+  const product = await handler({ ...owner, callbackData: "sub:plan:month" });
+  assert.match(product.text, /100 ₽ за 30 дней/);
   assert.equal(f.calls.length, 0);
   const payAction = product.replyMarkup.inline_keyboard[0][0].callback_data;
   const checkout = await handler({ ...owner, callbackData: payAction });
@@ -174,11 +176,46 @@ test("unconfigured shop still displays the product and pay button without any AP
   const f = await fixture(t);
   f.settings.enabled = false;
   const menu = new SubscriptionMenu(f.service);
-  const product = await menu.handle({ ...owner, callbackData: "sub:buy" });
+  const product = await menu.handle({ ...owner, callbackData: "sub:plan:month" });
   assert.match(product.replyMarkup.inline_keyboard[0][0].text, /Оплатить/);
   const response = await menu.handle({ ...owner, callbackData: "sub:unavailable" });
   assert.match(response.text, /ожидаем подключение/);
   assert.equal(f.calls.length, 0);
+});
+
+test("year selection persists 990 RUB, 365 days and distinct plan metadata", async (t) => {
+  const f = await fixture(t);
+  const menu = new SubscriptionMenu(f.service);
+  const month = await f.service.draft(owner, "month");
+  const card = await menu.handle({ ...owner, callbackData: "sub:plan:year" });
+  assert.match(card.text, /990 ₽ за 365 дней/);
+  const id = card.replyMarkup.inline_keyboard[0][0].callback_data.split(":").at(-1);
+  assert.notEqual(id, month.id);
+  await f.service.payment(owner, id);
+  const request = JSON.parse(f.calls[0].options.body);
+  assert.equal(request.amount.value, "990.00");
+  assert.equal(request.metadata.plan_id, "year");
+  f.update({ status: "succeeded", paid: true, captured_at: "2026-09-15T10:00:00Z" });
+  assert.equal((await f.service.payment(owner, id)).expiresAt, "2027-09-15T10:00:00.000Z");
+  assert.equal((await f.service.draft(owner, "month")).id, month.id);
+});
+
+test("menu and both plans are available before keys; deferred yearly button retains its plan", async (t) => {
+  const f = await fixture(t);
+  f.settings.enabled = false;
+  const menu = new SubscriptionMenu(f.service);
+  const home = await menu.handle({ ...owner, text: "/menu" });
+  assert.equal(home.replyMarkup.inline_keyboard[0][0].callback_data, "sub:buy");
+  const plans = await menu.handle({ ...owner, callbackData: "sub:buy" });
+  assert.match(plans.text, /210 ₽/);
+  assert.equal(plans.replyMarkup.inline_keyboard[1][0].callback_data, "sub:plan:year");
+  const card = await menu.handle({ ...owner, callbackData: "sub:plan:year" });
+  const deferred = card.replyMarkup.inline_keyboard[0][0].callback_data;
+  assert.equal(deferred, "sub:unavailable:year");
+  assert.equal(f.calls.length, 0);
+  f.settings.enabled = true;
+  const enabledCard = await menu.handle({ ...owner, callbackData: deferred });
+  assert.match(enabledCard.text, /990 ₽ за 365 дней/);
 });
 
 test("viewing a draft subscription does not create a payment", async (t) => {
@@ -187,6 +224,29 @@ test("viewing a draft subscription does not create a payment", async (t) => {
   const response = await new SubscriptionMenu(f.service).handle({ ...owner, text: "/subscription" });
   assert.match(response.replyMarkup.inline_keyboard[0][0].callback_data, /sub:pay:/);
   assert.equal(f.calls.length, 0);
+});
+
+test("legacy monthly orders retain their original request and idempotence key", async (t) => {
+  const f = await fixture(t);
+  const original = await f.service.draft(owner);
+  await f.service.store.transact((state) => {
+    delete state.orders[0].planId;
+    delete state.orders[0].request.metadata.plan_id;
+    return true;
+  });
+  const reused = await f.service.draft(owner, "month");
+  assert.equal(reused.id, original.id);
+  assert.equal(reused.request.metadata.plan_id, undefined);
+  await f.service.payment(owner, reused.id);
+  assert.equal(JSON.parse(f.calls[0].options.body).metadata.plan_id, undefined);
+});
+
+test("yearly discount is not advertised when custom yearly price has no saving", async (t) => {
+  const f = await fixture(t);
+  f.settings.plans.year.amount = "1300.00";
+  const plans = new SubscriptionMenu(f.service).planReply();
+  assert.doesNotMatch(plans.text, /скидка|Выгода/);
+  assert.doesNotMatch(plans.replyMarkup.inline_keyboard[1][0].text, /скидка/);
 });
 
 test("gateway acknowledges a callback using its actor and delivers inline buttons", async () => {

@@ -1,6 +1,7 @@
 export const TELEGRAM_BOT_PROFILE = {
   commands: [
     { command: "start", description: "Как пользоваться ботом" },
+    { command: "menu", description: "Главное меню и кнопка Купить" },
     { command: "help", description: "Примеры поиска города и района" },
     { command: "refresh", description: "Обновить данные для территории" },
     { command: "buy", description: "Купить тестовую подписку" },

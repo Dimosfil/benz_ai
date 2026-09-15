@@ -1,5 +1,6 @@
 const button = (text, callback_data) => ({ text, callback_data });
 const reply = (text, rows) => ({ text, replyMarkup: { inline_keyboard: rows } });
+const rubles = (value) => Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
 
 export class SubscriptionMenu {
   constructor(payments) {
@@ -11,7 +12,7 @@ export class SubscriptionMenu {
     return reply([
       "👋 Добро пожаловать в Benz AI!",
       `⛽ ${this.product.title}\n${this.product.description}`,
-      `${this.product.amount} ₽ / ${this.product.days} дней. Без автопродления.`,
+      "Подписка на месяц или год. Нажмите «Купить», чтобы выбрать срок. Без автопродления.",
       "Тестовая покупка через ЮKassa. Реальные деньги не списываются.",
       "Поиск по городу доступен обычным сообщением. Примеры — /help.",
     ].join("\n\n"), [[button("🔥 Купить", "sub:buy")], [button("Моя тестовая подписка", "sub:status")]]);
@@ -21,20 +22,29 @@ export class SubscriptionMenu {
     const text = String(message.text || "").trim();
     const action = message.callbackData || (/^\/buy(?:@\w+)?$/i.test(text) ? "sub:buy"
       : /^\/subscription(?:@\w+)?$/i.test(text) ? "sub:status" : "");
-    if (/^\/start(?:@\w+)?(?:\s+payment_return)?$/i.test(text) && !action) return this.welcome();
+    if (/^\/(?:start|menu)(?:@\w+)?(?:\s+payment_return)?$/i.test(text) && !action) return this.welcome();
     if (!action.startsWith("sub:")) return null;
     try {
       this.payments.assertOwner(message);
       if (action === "sub:home") return this.welcome();
       if (action === "sub:buy") {
-        const order = this.payments.settings.enabled ? await this.payments.draft(message) : null;
-        return this.productReply(order);
+        return this.planReply();
+      }
+      const selection = action.match(/^sub:plan:(month|year)$/);
+      if (selection) {
+        const planId = selection[1];
+        const order = this.payments.settings.enabled ? await this.payments.draft(message, planId) : null;
+        return this.productReply(order, planId);
       }
       if (!this.payments.settings.enabled) {
         return reply("Оплата временно недоступна: ожидаем подключение магазина ЮKassa. Попробуйте позже.",
-          [[button("← Назад", "sub:home")]]);
+          [[button("← Выбрать подписку", "sub:buy")], [button("🏠 Главное меню", "sub:home")]]);
       }
-      if (action === "sub:unavailable") return this.productReply(await this.payments.draft(message));
+      const deferred = action.match(/^sub:unavailable(?::(month|year))?$/);
+      if (deferred) {
+        const planId = deferred[1] || "month";
+        return this.productReply(await this.payments.draft(message, planId), planId);
+      }
       if (action === "sub:status") {
         const orders = await this.payments.store.transact((state) => state.orders.filter((order) => order.userId === message.userId));
         const latest = orders.at(-1);
@@ -52,16 +62,34 @@ export class SubscriptionMenu {
     }
   }
 
-  productReply(order) {
-    const amount = order?.request.amount.value || this.product.amount;
-    const days = order?.days || this.product.days;
+  planReply() {
+    const { month, year } = this.payments.settings.plans;
+    const saving = Number(month.amount) * 12 - Number(year.amount);
+    const discount = saving > 0 ? ` — скидка ${(saving / (Number(month.amount) * 12) * 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%` : "";
+    return reply([
+      "⛽ Выберите подписку",
+      `Месяц (${month.days} дней) — ${rubles(month.amount)} ₽`,
+      `Год (${year.days} дней) — ${rubles(year.amount)} ₽${discount}`,
+      ...(saving > 0 ? [`Выгода ${rubles(saving)} ₽ по сравнению с 12 месячными подписками.`] : []),
+      "В обоих тарифах: рассылка предложений и поиск дешёвого бензина рядом. Без автопродления.",
+    ].join("\n\n"), [
+      [button(`На месяц — ${rubles(month.amount)} ₽`, "sub:plan:month")],
+      [button(`На год — ${rubles(year.amount)} ₽${discount}`, "sub:plan:year")],
+      [button("🏠 Главное меню", "sub:home")],
+    ]);
+  }
+
+  productReply(order, planId = order?.planId || "month") {
+    const plan = this.payments.settings.plans[planId];
+    const amount = order?.request.amount.value || plan.amount;
+    const days = order?.days || plan.days;
     return reply([
       `⛽ ${this.product.title}`,
       "Что входит в подписку:\n✓ Рассылка предложений по топливу\n✓ Поиск дешёвого бензина рядом\n✓ Данные о вероятном наличии на АЗС",
-      `${amount} ₽ за ${days} дней. Без автопродления.`,
+      `${plan.label}: ${rubles(amount)} ₽ за ${days} дней. Без автопродления.`,
       "Сейчас тестируем оплату. Покупка создаёт тестовую подписку; рассылка и поиск по геопозиции ещё не подключены.",
       "Наличие и цены зависят от свежести источников и не гарантируются.",
-    ].join("\n\n"), [[button(`💳 Оплатить ${amount} ₽`, order ? `sub:pay:${order.id}` : "sub:unavailable")], [button("← Назад", "sub:home")]]);
+    ].join("\n\n"), [[button(`💳 Оплатить ${rubles(amount)} ₽`, order ? `sub:pay:${order.id}` : `sub:unavailable:${planId}`)], [button("← Выбрать подписку", "sub:buy")], [button("🏠 Главное меню", "sub:home")]]);
   }
 
   orderReply(order) {

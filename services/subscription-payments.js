@@ -19,24 +19,26 @@ export class SubscriptionPayments {
     }
   }
 
-  async draft(message) {
+  async draft(message, planId = "month") {
     if (!this.settings.enabled) throw new Error("Тестовая оплата выключена.");
     this.assertOwner(message);
+    const product = this.settings.plans[planId];
+    if (!product) throw new Error("Неизвестная подписка.");
     return this.store.transact((state) => {
       const existing = state.orders.findLast((order) => order.userId === message.userId
+        && (order.planId || "month") === planId
         && !["succeeded", "canceled"].includes(order.status));
       if (existing) return existing;
       if (state.orders.length >= 10_000) throw new Error("Лимит тестовых заказов достигнут.");
-      const product = this.settings.product;
       const id = randomUUID();
       const order = {
-        id, userId: message.userId, status: "draft", createdAt: this.now(), days: product.days,
+        id, planId, userId: message.userId, status: "draft", createdAt: this.now(), days: product.days,
         request: {
           amount: { value: product.amount, currency: product.currency },
           capture: true,
           confirmation: { type: "redirect", return_url: this.settings.returnUrl },
           description: `${product.title} — ${product.days} дн. (тест)`,
-          metadata: { order_id: id, product_id: product.id },
+          metadata: { order_id: id, product_id: product.id, plan_id: planId },
         },
       };
       state.orders.push(order);
@@ -71,6 +73,7 @@ export class SubscriptionPayments {
     const payment = order.paymentId ? await this.client.get(order.paymentId) : await this.client.create(order);
     if (payment.test !== true || payment.metadata?.order_id !== order.id
       || payment.metadata?.product_id !== order.request.metadata.product_id
+      || payment.metadata?.plan_id !== order.request.metadata.plan_id
       || payment.amount?.value !== order.request.amount.value
       || payment.amount?.currency !== order.request.amount.currency
       || String(payment.recipient?.account_id) !== this.settings.shopId

@@ -2,6 +2,10 @@ export function loadSubscriptionConfig(env = process.env) {
   const enabled = /^(1|true|yes)$/i.test(env.YOOKASSA_TEST_ENABLED || "");
   const amount = env.SUBSCRIPTION_PRICE_RUB || "100.00";
   const days = Number(env.SUBSCRIPTION_DAYS || 30);
+  const yearlyAmount = env.SUBSCRIPTION_YEAR_PRICE_RUB || "990.00";
+  if (!/^\d{1,6}(\.\d{1,2})?$/.test(yearlyAmount) || Number(yearlyAmount) < 1) {
+    throw new Error("SUBSCRIPTION_YEAR_PRICE_RUB must be between 1 and 999999.99 RUB.");
+  }
   if (!/^\d{1,6}(\.\d{1,2})?$/.test(amount) || Number(amount) < 1) {
     throw new Error("SUBSCRIPTION_PRICE_RUB must be between 1 and 999999.99 RUB.");
   }
@@ -22,6 +26,10 @@ export function loadSubscriptionConfig(env = process.env) {
       currency: "RUB",
       days,
     },
+  };
+  settings.plans = {
+    month: { ...settings.product, planId: "month", label: "На месяц" },
+    year: { ...settings.product, planId: "year", label: "На год", amount: Number(yearlyAmount).toFixed(2), days: 365 },
   };
   if (enabled) {
     if (!/^\d+$/.test(settings.shopId) || !/^test_\S+$/.test(settings.secretKey)) {
