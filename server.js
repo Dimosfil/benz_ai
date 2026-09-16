@@ -466,8 +466,13 @@ export function startServer(port = config.port, host = config.host) {
         if (!/^\d{1,20}$/.test(id || "")) return json(res, 400, { error: "Некорректный ID организации" });
         try {
           return json(res, 200, await fetchYandexStationPrices(id));
-        } catch {
-          return json(res, 503, { error: "Не удалось проверить цены. Откройте карточку повторно позже." });
+        } catch (error) {
+          const sourceError = /^YANDEX_/.test(error.code || "");
+          return json(res, 503, {
+            error: sourceError ? error.message : "Не удалось проверить цены. Откройте карточку повторно позже.",
+            code: sourceError ? error.code : "PRICE_LOOKUP_FAILED",
+            ...(sourceError && error.diagnostics ? { diagnostics: error.diagnostics } : {}),
+          });
         }
       }
       if (requestUrl.pathname === "/api/stations") {

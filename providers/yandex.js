@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { normalizeFuelName } from "../domain/stations.js";
+import { parseYandexPriceDocument } from "./yandex-price-document.js";
 
 const cache = new Map();
 const priceRequests = new Map();
@@ -13,12 +14,17 @@ export async function fetchYandexStationPrices(yandexOrgId) {
   if (priceRequests.has(id)) return priceRequests.get(id);
   if (priceRequests.size >= config.yandex.concurrency) throw new Error("Проверка цен занята. Откройте карточку повторно через несколько секунд");
   const request = checkStation({ yandexOrgId: id })
-    .then((station) => ({
-      yandexOrgId: id,
-      prices: station.prices,
-      priceUpdatedAt: station.priceUpdatedAt,
-      yandexCheckedAt: station.yandexCheckedAt,
-    }))
+    .then((station) => {
+      if (station.yandexPriceStatus === "unverified") throw unverifiedPrices(station.yandexPriceDiagnostics);
+      return {
+        yandexOrgId: id,
+        prices: station.prices,
+        priceUpdatedAt: station.priceUpdatedAt,
+        yandexCheckedAt: station.yandexCheckedAt,
+        priceStatus: station.yandexPriceStatus,
+        stationClosed: station.yandexStationClosed,
+      };
+    })
     .finally(() => priceRequests.delete(id));
   priceRequests.set(id, request);
   return request;
@@ -39,15 +45,8 @@ function decodeEmbeddedHtml(value) {
 }
 
 export function parseYandexFuelPrices(rawHtml) {
-  const html = decodeEmbeddedHtml(rawHtml);
-  const pattern = /search-fuel-info-view__name"[^>]*>(?<fuel>[^<]+)<\/div><div class="search-fuel-info-view__value"[^>]*>(?<price>[^<]*)<\/div>/g;
-  const prices = {};
-  for (const match of html.matchAll(pattern)) {
-    const value = Number(match.groups.price.replace(",", ".").replace(/[^0-9.]/g, ""));
-    if (Number.isFinite(value) && value > 0) prices[normalizeFuelName(match.groups.fuel)] = { value, currency: "RUB", source: "yandex" };
-  }
-  const updated = html.match(/Обновлено (?<date>[^<\\]{1,80}) по данным/)?.groups?.date ?? null;
-  return { prices, updatedAt: updated };
+  const parsed = parseYandexPriceDocument(rawHtml);
+  return { prices: parsed.prices, updatedAt: parsed.updatedAt };
 }
 
 function relativeObservationTime(text, now) {
@@ -116,6 +115,12 @@ function requestSignal(signal) {
   return signal && typeof AbortSignal.any === "function" ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
+function unverifiedPrices(diagnostics) {
+  return Object.assign(new Error("Ответ Яндекса не содержит распознаваемых данных о ценах. Проверьте карточку в Яндекс Картах."), {
+    code: "YANDEX_PRICES_UNVERIFIED", diagnostics,
+  });
+}
+
 async function checkStation(station, signal) {
   const saved = readFreshCache(cache, station.yandexOrgId, config.yandex.cacheTtlMs);
   if (saved) return applyYandexResult(station, saved);
@@ -123,18 +128,25 @@ async function checkStation(station, signal) {
     signal: requestSignal(signal),
     headers: { "User-Agent": "Mozilla/5.0 BenzAI/0.1", "Accept-Language": "ru-RU,ru;q=0.9" },
   });
-  if (!response.ok) throw new Error(`Яндекс Карты вернули HTTP ${response.status}`);
+  if (!response.ok) throw Object.assign(new Error("Яндекс Карты временно недоступны"), { code: "YANDEX_HTTP_ERROR", diagnostics: { upstreamStatus: response.status } });
   const html = await response.text();
-  if (/showcaptcha|SmartCaptcha/i.test(html)) throw new Error("Яндекс временно требует проверку доступа");
-  const parsed = parseYandexFuelPrices(html);
+  if (/showcaptcha|SmartCaptcha/i.test(html) || /showcaptcha/i.test(response.url)) {
+    throw Object.assign(new Error("Яндекс ограничил автоматическую проверку цен. Посмотрите цены по ссылке на карту."), { code: "YANDEX_ACCESS_CHECK" });
+  }
+  const parsed = parseYandexPriceDocument(html, station.yandexOrgId);
   const availability = parseYandexFuelAvailability(html);
+  const diagnostics = { upstreamStatus: response.status, responseBytes: Buffer.byteLength(html), ...parsed.diagnostics };
+  if (parsed.status === "unverified" && !availability) throw unverifiedPrices(diagnostics);
   const value = {
     prices: parsed.prices,
     priceUpdatedAt: parsed.updatedAt,
     availability,
     yandexCheckedAt: new Date().toISOString(),
+    yandexPriceStatus: parsed.status,
+    yandexStationClosed: parsed.closed,
+    ...(parsed.status === "unverified" ? { yandexPriceDiagnostics: diagnostics } : {}),
   };
-  writeBoundedCache(cache, station.yandexOrgId, value, config.yandex.cacheMaxEntries);
+  if (parsed.status === "available") writeBoundedCache(cache, station.yandexOrgId, value, config.yandex.cacheMaxEntries);
   return applyYandexResult(station, value);
 }
 

@@ -546,10 +546,14 @@ export function createStationMap({ container, message, count }) {
         prices: { ...(current?.prices || {}), ...data.prices },
         priceUpdatedAt: data.priceUpdatedAt || current?.priceUpdatedAt || null,
         yandexCheckedAt: data.yandexCheckedAt,
-        priceLookupMessage: Object.keys(data.prices || {}).length ? "Цены проверены в Яндекс Картах" : "В Яндекс Картах цены не опубликованы",
+        priceLookupMessage: data.stationClosed
+          ? "Яндекс помечает АЗС как закрытую. Указанные цены могут быть неактуальны."
+          : Object.keys(data.prices || {}).length ? "Цены получены из Яндекс Карт"
+            : data.priceStatus === "not_published" ? "В карточке Яндекса цены не указаны"
+              : "Не удалось подтвердить цены по ответу Яндекса",
       });
-    } catch {
-      update({ priceLookupMessage: "Не удалось проверить цены. Откройте карточку повторно позже." });
+    } catch (error) {
+      update({ priceLookupMessage: error instanceof Error ? error.message : "Не удалось проверить цены. Откройте карточку повторно позже." });
     } finally {
       priceRequests.delete(key);
     }

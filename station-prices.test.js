@@ -39,6 +39,14 @@ test("selected-station prices are fetched, cached and returned independently of 
     globalThis.fetch = async (url, options) => String(url).startsWith("https://yandex.ru/")
       ? new Response("SmartCaptcha") : nativeFetch(url, options);
     assert.equal((await nativeFetch(`${base}?yandexOrgId=38745431337`)).status, 503);
+    globalThis.fetch = async (url, options) => String(url).startsWith("https://yandex.ru/")
+      ? new Response("<html>JavaScript required</html>") : nativeFetch(url, options);
+    const unverified = await nativeFetch(`${base}?yandexOrgId=38745431337`);
+    assert.equal(unverified.status, 503);
+    const failure = await unverified.json();
+    assert.equal(failure.code, "YANDEX_PRICES_UNVERIFIED");
+    assert.equal(failure.diagnostics.stateFound, false);
+    assert.equal(JSON.stringify(failure).includes("<html>"), false);
   } finally {
     globalThis.fetch = nativeFetch;
     clearYandexCache();
