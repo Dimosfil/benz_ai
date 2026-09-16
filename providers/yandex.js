@@ -3,6 +3,26 @@ import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { normalizeFuelName } from "../domain/stations.js";
 
 const cache = new Map();
+const priceRequests = new Map();
+
+// A selected station gets its own request budget, independent of the region search.
+export async function fetchYandexStationPrices(yandexOrgId) {
+  if (!/^\d{1,20}$/.test(String(yandexOrgId || ""))) throw new Error("Параметр yandexOrgId должен быть числовым ID организации");
+  if (!config.yandex.enabled) throw new Error("Проверка цен Яндекса отключена");
+  const id = String(yandexOrgId);
+  if (priceRequests.has(id)) return priceRequests.get(id);
+  if (priceRequests.size >= config.yandex.concurrency) throw new Error("Проверка цен занята. Откройте карточку повторно через несколько секунд");
+  const request = checkStation({ yandexOrgId: id })
+    .then((station) => ({
+      yandexOrgId: id,
+      prices: station.prices,
+      priceUpdatedAt: station.priceUpdatedAt,
+      yandexCheckedAt: station.yandexCheckedAt,
+    }))
+    .finally(() => priceRequests.delete(id));
+  priceRequests.set(id, request);
+  return request;
+}
 
 export function clearYandexCache() {
   cache.clear();
@@ -105,6 +125,7 @@ async function checkStation(station, signal) {
   });
   if (!response.ok) throw new Error(`Яндекс Карты вернули HTTP ${response.status}`);
   const html = await response.text();
+  if (/showcaptcha|SmartCaptcha/i.test(html)) throw new Error("Яндекс временно требует проверку доступа");
   const parsed = parseYandexFuelPrices(html);
   const availability = parseYandexFuelAvailability(html);
   const value = {

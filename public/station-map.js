@@ -11,7 +11,7 @@ import {
   stationSources,
 } from "./station-view.js";
 import { filterStations } from "./station-filter.js";
-import { fetchNdjson } from "./api-client.js";
+import { fetchJson, fetchNdjson } from "./api-client.js";
 
 const STATUS_COLORS = new Set(["available", "maybe_available", "not_available", "no_data"]);
 const STATUS_CHART_COLORS = Object.freeze({
@@ -376,9 +376,10 @@ function popupFor(station, selectedFuels) {
   popup.append(statusCard);
 
   const fuels = stationFuelEntries(station, selectedFuels);
-  if (fuels.length) {
+  if (fuels.length || station.priceLookupMessage) {
     const fuelSection = element("section", "map-popup-section");
     fuelSection.append(text("h4", "Топливо и цены"));
+    if (station.priceLookupMessage) fuelSection.append(text("p", station.priceLookupMessage, "map-popup-status-note"));
     const fuelList = element("div", "map-popup-fuel-list");
     fuels.forEach((fuel) => {
       const row = element("div", "map-popup-fuel-row");
@@ -389,7 +390,7 @@ function popupFor(station, selectedFuels) {
         text("span", labels[fuel.status] || labels.no_data),
       );
       row.append(name, text("strong", fuel.price == null
-        ? "—"
+        ? "Нет цены"
         : formatPrice(fuel.price, fuel.currency), "map-popup-price"));
       fuelList.append(row);
     });
@@ -462,6 +463,7 @@ export function createStationMap({ container, message, count }) {
   const stationIdentityIndex = new Map();
   const stationKeys = new WeakMap();
   const markerCache = new Map();
+  const priceRequests = new Map();
   let loadedBounds = null;
   let filters = { fuels: [], statuses: [], text: "" };
   let loadTimer = null;
@@ -520,6 +522,39 @@ export function createStationMap({ container, message, count }) {
     return changed;
   }
 
+  async function loadPopupPrices(key, marker) {
+    const station = stationCache.get(key);
+    if (!station?.yandexOrgId || priceRequests.has(key)) return;
+    const id = String(station.yandexOrgId);
+    const update = (patch) => {
+      const current = stationCache.get(key);
+      if (!current || String(current.yandexOrgId) !== id || markerCache.get(key) !== marker) return;
+      const updated = { ...current, ...patch };
+      stationCache.set(key, updated);
+      stationKeys.set(updated, key);
+      syncStationCache();
+      if (marker.isPopupOpen()) marker.setPopupContent(popupFor(stationCache.get(key), filters.fuels));
+    };
+    priceRequests.set(key, true);
+    update({ priceLookupMessage: "Проверяем цены…" });
+    try {
+      const data = await fetchJson(`/api/station-prices?yandexOrgId=${encodeURIComponent(id)}`, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      const current = stationCache.get(key);
+      update({
+        prices: { ...(current?.prices || {}), ...data.prices },
+        priceUpdatedAt: data.priceUpdatedAt || current?.priceUpdatedAt || null,
+        yandexCheckedAt: data.yandexCheckedAt,
+        priceLookupMessage: Object.keys(data.prices || {}).length ? "Цены проверены в Яндекс Картах" : "В Яндекс Картах цены не опубликованы",
+      });
+    } catch {
+      update({ priceLookupMessage: "Не удалось проверить цены. Откройте карточку повторно позже." });
+    } finally {
+      priceRequests.delete(key);
+    }
+  }
+
   function renderMarkers() {
     const loading = arguments[0]?.loading === true;
     const filtered = filterStations(viewportStations, filters);
@@ -534,6 +569,9 @@ export function createStationMap({ container, message, count }) {
       const status = stationMapStatus(station, filters.fuels);
       const existing = markerCache.get(key);
       if (existing) {
+        if (existing.isPopupOpen() && station.yandexOrgId && !station.priceLookupMessage) {
+          void loadPopupPrices(key, existing);
+        }
         existing.options.title = station.name || "АЗС";
         existing.options.alt = `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`;
         existing.getElement?.()?.setAttribute("title", existing.options.title);
@@ -567,6 +605,7 @@ export function createStationMap({ container, message, count }) {
       marker.on("popupopen", () => {
         activePopupStationKey = key;
         showMessage("");
+        void loadPopupPrices(key, marker);
       });
       marker.on("popupclose", () => {
         if (activePopupStationKey === key) activePopupStationKey = null;

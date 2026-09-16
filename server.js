@@ -14,7 +14,7 @@ import { clearMultigoCache, fetchMultigo } from "./providers/multigo.js";
 import { fetchSber, normalizeSberStation } from "./providers/sber.js";
 import { SberBrowserWorker } from "./providers/sber-browser.js";
 import { fetchTbank } from "./providers/tbank.js";
-import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
+import { clearYandexCache, enrichYandexPrices, fetchYandexStationPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
 import { llmNormalizerStatus } from "./services/location-query-normalizer.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
@@ -458,6 +458,17 @@ export function startServer(port = config.port, host = config.host) {
           ...body,
           cacheRefresh: { refreshed: true, completedAt: new Date().toISOString(), durationMs: Date.now() - startedAt },
         });
+      }
+      if (requestUrl.pathname === "/api/station-prices") {
+        if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
+        if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });
+        const id = requestUrl.searchParams.get("yandexOrgId");
+        if (!/^\d{1,20}$/.test(id || "")) return json(res, 400, { error: "Некорректный ID организации" });
+        try {
+          return json(res, 200, await fetchYandexStationPrices(id));
+        } catch {
+          return json(res, 503, { error: "Не удалось проверить цены. Откройте карточку повторно позже." });
+        }
       }
       if (requestUrl.pathname === "/api/stations") {
         if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
