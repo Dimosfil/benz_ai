@@ -1,3 +1,4 @@
+import { addBasemapControl } from "./map-basemaps.js";
 import {
   formatPrice,
   hasRecentCrowdConfirmation,
@@ -444,12 +445,8 @@ export function createStationMap({ container, message, count }) {
     return { showStations() {}, setFilters() {}, locateUser() {}, clear() {}, activate() {}, deactivate() {} };
   }
 
-  const map = L.map(container, { zoomControl: true, preferCanvas: true });
+  const map = L.map(container, { zoomControl: true, preferCanvas: true, maxZoom: 19 });
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noreferrer">Leaflet</a>');
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
   const markers = L.markerClusterGroup({
     chunkedLoading: true,
     maxClusterRadius: 52,
@@ -458,6 +455,7 @@ export function createStationMap({ container, message, count }) {
   });
   map.addLayer(markers);
   map.setView([55.75, 37.62], 5);
+  addBasemapControl(L, map);
   let viewportStations = [];
   const stationCache = new Map();
   const stationIdentityIndex = new Map();
