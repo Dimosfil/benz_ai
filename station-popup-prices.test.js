@@ -14,7 +14,7 @@ function content(element) {
   return [element.textContent, ...element.children.map(content)].join(" ");
 }
 
-test("opening a popup fills prices, preserves them across snapshots and ignores a removed marker", async () => {
+for (const hasOrganizationId of [true, false]) test(`opening a popup fills prices with organization ID ${hasOrganizationId}, preserves snapshots and ignores a removed marker`, async () => {
   const originals = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame };
   const created = [];
   const bounds = { getSouth: () => 50, getNorth: () => 53, getWest: () => 38, getEast: () => 41 };
@@ -45,21 +45,26 @@ test("opening a popup fills prices, preserves them across snapshots and ignores 
   let resolveRequest;
   let calls = 0;
   globalThis.fetch = async (url) => {
-    assert.equal(url, "/api/station-prices?yandexOrgId=38745431337");
+    const query = new URL(url, "http://localhost").searchParams;
+    assert.equal(query.get("yandexOrgId"), hasOrganizationId || calls > 0 ? "38745431337" : null);
+    assert.equal(query.get("lat"), "51.69258");
+    assert.equal(query.get("lon"), "39.377016");
+    assert.equal(query.get("name"), "Газпром");
     calls++;
     return new Promise((resolve) => { resolveRequest = resolve; });
   };
   const view = createStationMap({ container: {}, message: node(), count: node() });
   const station = { name: "Газпром", lat: 51.69258, lon: 39.377016,
-    sourceRefs: [{ source: "tbank", externalId: "one" }], yandexOrgId: "38745431337",
+    sourceRefs: [{ source: "sber", externalId: "one" }], yandexOrgId: hasOrganizationId ? "38745431337" : null,
     fuelStatus: { 92: "maybe_available" }, prices: {} };
   const prices = { 92: { value: 64.95, currency: "RUB", source: "yandex" } };
   try {
     view.showStations([station], { preserveStations: true });
     const marker = created[0];
     marker.open();
-    assert.match(content(marker.popup), /Проверяем цены/);
-    resolveRequest(Response.json({ prices, priceUpdatedAt: "15 сентября 2026" }));
+    assert.match(content(marker.popup), /[Пп]роверяем цены/);
+    assert.doesNotMatch(content(marker.popup), /не передают цены/);
+    resolveRequest(Response.json({ yandexOrgId: "38745431337", prices, priceUpdatedAt: "15 сентября 2026" }));
     await new Promise((resolve) => setImmediate(resolve));
     assert.match(content(marker.popup), /64,95/);
     assert.match(content(marker.popup), /Цены получены/);

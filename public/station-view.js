@@ -183,7 +183,9 @@ export function stationFreshText(station) {
       : `Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждено ${formatAge(ageMs)} назад`
     : "Данных о последней оплате нет";
   const queue = stationQueueText(station);
-  const freshness = station.priceUpdatedAt ? `${payment} · цены: ${station.priceUpdatedAt}` : payment;
+  const priceTime = Date.parse(station.priceUpdatedAt);
+  const priceDate = Number.isFinite(priceTime) ? formatter.format(new Date(priceTime)) : station.priceUpdatedAt;
+  const freshness = priceDate ? `${payment} · цены: ${priceDate}` : payment;
   return queue ? `${queue} · ${freshness}` : freshness;
 }
 

@@ -383,7 +383,7 @@ function popupFor(station, selectedFuels) {
     fuelSection.append(text("h4", "Топливо и цены"));
     if (station.priceLookupMessage) fuelSection.append(text("p", station.priceLookupMessage, "map-popup-status-note"));
     const priceNote = stationPriceNote(station);
-    if (priceNote) fuelSection.append(text("p", priceNote, "map-popup-status-note"));
+    if (priceNote && !station.priceLookupMessage) fuelSection.append(text("p", priceNote, "map-popup-status-note"));
     const fuelList = element("div", "map-popup-fuel-list");
     fuels.forEach((fuel) => {
       const row = element("div", "map-popup-fuel-row");
@@ -525,11 +525,13 @@ export function createStationMap({ container, message, count }) {
 
   async function loadPopupPrices(key, marker) {
     const station = stationCache.get(key);
-    if (!station?.yandexOrgId || priceRequests.has(key)) return;
-    const id = String(station.yandexOrgId);
+    if (!station || !hasMapCoordinates(station) || priceRequests.has(key)) return;
+    const id = station.yandexOrgId ? String(station.yandexOrgId) : null;
     const update = (patch) => {
       const current = stationCache.get(key);
-      if (!current || String(current.yandexOrgId) !== id || markerCache.get(key) !== marker) return;
+      if (!current || markerCache.get(key) !== marker) return;
+      const resolvedId = patch.yandexOrgId || id;
+      if (current.yandexOrgId && resolvedId && String(current.yandexOrgId) !== resolvedId) return;
       const updated = { ...current, ...patch };
       stationCache.set(key, updated);
       stationKeys.set(updated, key);
@@ -537,13 +539,20 @@ export function createStationMap({ container, message, count }) {
       if (marker.isPopupOpen()) marker.setPopupContent(popupFor(stationCache.get(key), filters.fuels));
     };
     priceRequests.set(key, true);
-    update({ priceLookupMessage: "Проверяем цены…" });
+    update({ priceLookupMessage: id ? "Проверяем цены…" : "Ищем карточку АЗС и проверяем цены…" });
     try {
-      const data = await fetchJson(`/api/station-prices?yandexOrgId=${encodeURIComponent(id)}`, {
-        signal: AbortSignal.timeout(20_000),
+      const params = new URLSearchParams({ lat: String(station.lat), lon: String(station.lon), name: station.name || "АЗС" });
+      if (id) params.set("yandexOrgId", id);
+      const data = await fetchJson(`/api/station-prices?${params}`, {
+        signal: AbortSignal.timeout(35_000),
       });
       const current = stationCache.get(key);
+      const yandexOrgId = String(data.yandexOrgId || id || "");
       update({
+        yandexOrgId,
+        links: { ...(current?.links || {}), yandex: `https://yandex.ru/maps/org/${yandexOrgId}/` },
+        sourceRefs: [...new Map([...(current?.sourceRefs || []), { source: "yandex", externalId: yandexOrgId }]
+          .map((ref) => [`${ref.source}:${ref.externalId}`, ref])).values()],
         prices: { ...(current?.prices || {}), ...data.prices },
         priceUpdatedAt: data.priceUpdatedAt || current?.priceUpdatedAt || null,
         yandexCheckedAt: data.yandexCheckedAt,
@@ -574,7 +583,7 @@ export function createStationMap({ container, message, count }) {
       const status = stationMapStatus(station, filters.fuels);
       const existing = markerCache.get(key);
       if (existing) {
-        if (existing.isPopupOpen() && station.yandexOrgId && !station.priceLookupMessage) {
+        if (existing.isPopupOpen() && !station.priceLookupMessage) {
           void loadPopupPrices(key, existing);
         }
         existing.options.title = station.name || "АЗС";

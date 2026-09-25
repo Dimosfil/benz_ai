@@ -83,6 +83,8 @@ export const config = Object.freeze({
     timeoutMs: 15_000,
     summaryTimeoutMs: positiveInteger(process.env.YANDEX_SUMMARY_TIMEOUT_MS, 4_000),
     concurrency: 3,
+    stationMatchMaxDistanceMeters: 150,
+    unnamedStationMatchMaxDistanceMeters: 40,
   }),
   gdebenz: Object.freeze({
     url: process.env.GDEBENZ_API_URL || "https://gdebenz.ru/api/nearby",

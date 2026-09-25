@@ -10,7 +10,7 @@ function plainText(value) {
   return value.replace(/<[^>]*>/g, "").trim();
 }
 
-function stateItems(rawHtml) {
+export function parseYandexStateItems(rawHtml) {
   for (const match of rawHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
     if (!/\bclass\s*=\s*["'][^"']*\bstate-view\b/.test(match[1])) continue;
     try {
@@ -25,7 +25,7 @@ function stateItems(rawHtml) {
 // Read only the requested organization, never a recommendation elsewhere on the page.
 export function parseYandexPriceDocument(rawHtml, organizationId = null) {
   const html = decodeHtml(rawHtml);
-  const state = stateItems(rawHtml);
+  const state = parseYandexStateItems(rawHtml);
   const item = organizationId == null
     ? state.items.find((candidate) => candidate.fuelInfo)
     : state.items.find((candidate) => String(candidate.id) === String(organizationId));
@@ -46,7 +46,8 @@ export function parseYandexPriceDocument(rawHtml, organizationId = null) {
     }
     const timestamp = Number(item.fuelInfo.timestamp);
     const date = new Date(timestamp * 1000);
-    result.updatedAt = updated || (timestamp > 0 && Number.isFinite(date.getTime()) ? date.toISOString() : null);
+    result.updatedAt = timestamp > 0 && Number.isFinite(date.getTime())
+      ? date.toISOString() : state.items.length === 1 ? updated : null;
     if (Object.keys(result.prices).length) {
       result.status = "available";
       return result;

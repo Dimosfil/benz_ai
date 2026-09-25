@@ -14,7 +14,8 @@ import { clearMultigoCache, fetchMultigo } from "./providers/multigo.js";
 import { fetchSber, normalizeSberStation } from "./providers/sber.js";
 import { SberBrowserWorker } from "./providers/sber-browser.js";
 import { fetchTbank } from "./providers/tbank.js";
-import { clearYandexCache, enrichYandexPrices, fetchYandexStationPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
+import { clearYandexCache, enrichYandexPrices, isYandexVerificationCandidate, parseYandexFuelAvailability, parseYandexFuelPrices } from "./providers/yandex.js";
+import { clearSelectedStationPriceCache, fetchSelectedStationPrices } from "./providers/yandex-station-search.js";
 import { clearGeocoderCache, geocodeLocation } from "./services/geocoder.js";
 import { llmNormalizerStatus } from "./services/location-query-normalizer.js";
 import { createBenzTelegramHandler, TELEGRAM_BOT_PROFILE } from "./services/telegram-bot.js";
@@ -83,6 +84,19 @@ export function readBbox(params) {
     throw new Error("Слишком большая область карты. Приблизьте карту для загрузки АЗС");
   }
   return bbox;
+}
+
+export function readStationPriceQuery(params) {
+  const yandexOrgId = params.get("yandexOrgId");
+  if (yandexOrgId !== null && !/^\d{1,20}$/.test(yandexOrgId)) throw new Error("Некорректный ID организации");
+  if (yandexOrgId && !params.has("lat") && !params.has("lon")) return { yandexOrgId };
+  const lat = Number(params.get("lat"));
+  const lon = Number(params.get("lon"));
+  const name = String(params.get("name") || "").trim();
+  if (!params.get("lat")?.trim() || !params.get("lon")?.trim()
+    || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180
+    || !name || name.length > 200) throw new Error("Некорректные координаты или название АЗС");
+  return { yandexOrgId, lat, lon, name };
 }
 
 function fulfilled(result) {
@@ -377,6 +391,7 @@ function clearAllCaches() {
   clearBenzupCache();
   clearGeocoderCache();
   clearYandexCache();
+  clearSelectedStationPriceCache();
   clearGdebenzCache();
   clearMultigoCache();
   sberWorker.invalidateAll();
@@ -431,8 +446,9 @@ export function startServer(port = config.port, host = config.host) {
     throw new Error("TELEGRAM_POLLING_ENABLED=true requires a valid TELEGRAM_BOT_TOKEN.");
   }
   const server = createServer(async (req, res) => {
+    let requestUrl;
     try {
-      const requestUrl = new URL(req.url || "/", "http://localhost");
+      requestUrl = new URL(req.url || "/", "http://localhost");
       if (requestUrl.pathname === "/api/location") {
         if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
         if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });
@@ -462,10 +478,11 @@ export function startServer(port = config.port, host = config.host) {
       if (requestUrl.pathname === "/api/station-prices") {
         if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
         if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });
-        const id = requestUrl.searchParams.get("yandexOrgId");
-        if (!/^\d{1,20}$/.test(id || "")) return json(res, 400, { error: "Некорректный ID организации" });
+        let station;
+        try { station = readStationPriceQuery(requestUrl.searchParams); }
+        catch (error) { return json(res, 400, { error: error.message }); }
         try {
-          return json(res, 200, await fetchYandexStationPrices(id));
+          return json(res, 200, await fetchSelectedStationPrices(station));
         } catch (error) {
           const sourceError = /^YANDEX_/.test(error.code || "");
           return json(res, 503, {
@@ -531,7 +548,7 @@ export function startServer(port = config.port, host = config.host) {
       if (error.code === "ENOENT") return json(res, 404, { error: "Не найдено" });
       if (error.code === "GEOCODER_BUSY") return json(res, 503, { error: "Сервис поиска временно перегружен. Повторите позже" });
       const clientError = /^(Введите|Не удалось найти|Параметр |Некорректные границы|Слишком большая область|Координаты карты)/u.test(String(error.message || ""));
-      if (!clientError) console.error(`Request failed for ${requestUrl.pathname}:`, error);
+      if (!clientError) console.error(`Request failed for ${requestUrl?.pathname || "/"}:`, error);
       json(res, clientError ? 400 : 500, { error: clientError ? error.message : "Внутренняя ошибка сервера" });
     }
   }).listen(port, host, () => {
