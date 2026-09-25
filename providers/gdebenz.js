@@ -16,6 +16,25 @@ function fuelName(value) {
   return normalizeFuelName(value);
 }
 
+const KNOWN_FUELS = new Set(["80", "92", "95", "98", "100", "DT", "LPG", "CNG"]);
+
+function normalizeDetail(rawDetail, fuels) {
+  const detail = String(rawDetail || "").trim();
+  const separator = detail.indexOf("·");
+  if (separator < 0) return { detail, confirmedFuels: fuels };
+  const claimed = detail.slice(0, separator).split(",").map(fuelName);
+  if (!claimed.length || claimed.some((fuel) => !KNOWN_FUELS.has(fuel))) {
+    return { detail, confirmedFuels: fuels };
+  }
+  const suffix = detail.slice(separator + 1).trim();
+  const claimedSet = new Set(claimed);
+  const same = fuels.length === claimedSet.size && fuels.every((fuel) => claimedSet.has(fuel));
+  return {
+    detail: same ? suffix : `У источника расходятся данные о марках топлива${suffix ? `. ${suffix}` : ""}`,
+    confirmedFuels: same ? fuels : fuels.filter((fuel) => claimedSet.has(fuel)),
+  };
+}
+
 function observedAt(value) {
   if (!value) return null;
   const normalized = String(value).trim().replace(" ", "T");
@@ -26,7 +45,10 @@ function observedAt(value) {
 export function normalizeGdebenzStation(station) {
   const overallStatus = status(station.status);
   const fuels = String(station.fuels_now || "").split(",").map(fuelName).filter(Boolean);
-  const fuelStatus = Object.fromEntries(fuels.map((fuel) => [fuel, overallStatus]));
+  const { detail, confirmedFuels } = normalizeDetail(station.detail, fuels);
+  const fuelStatus = Object.fromEntries(fuels.map((fuel) => [
+    fuel, confirmedFuels.includes(fuel) ? overallStatus : "no_data",
+  ]));
   const externalId = String(station.osm_id || "");
   const lastTransactionAt = observedAt(station.last_at);
   return {
@@ -45,14 +67,14 @@ export function normalizeGdebenzStation(station) {
         fuelStatus,
         observedAt: lastTransactionAt,
         rawStatus: station.status || null,
-        detail: station.detail || "",
+        detail,
         confirmations: Number(station.confirmations) || 0,
         confidence: Number(station.confidence_base) || 0,
       },
     },
     confidence: Number(station.confidence_base) || null,
     confirmations: Number(station.confirmations) || 0,
-    detail: station.detail || "",
+    detail,
     lastTransactionAt,
     prices: {},
     priceUpdatedAt: null,

@@ -8,6 +8,7 @@ import {
   stationConfidence,
   stationFuelEntries,
   stationFreshText,
+  stationPriceNote,
   stationQueueText,
   stationSources,
 } from "./station-view.js";
@@ -381,6 +382,8 @@ function popupFor(station, selectedFuels) {
     const fuelSection = element("section", "map-popup-section");
     fuelSection.append(text("h4", "Топливо и цены"));
     if (station.priceLookupMessage) fuelSection.append(text("p", station.priceLookupMessage, "map-popup-status-note"));
+    const priceNote = stationPriceNote(station);
+    if (priceNote) fuelSection.append(text("p", priceNote, "map-popup-status-note"));
     const fuelList = element("div", "map-popup-fuel-list");
     fuels.forEach((fuel) => {
       const row = element("div", "map-popup-fuel-row");
@@ -391,7 +394,7 @@ function popupFor(station, selectedFuels) {
         text("span", labels[fuel.status] || labels.no_data),
       );
       row.append(name, text("strong", fuel.price == null
-        ? "Нет цены"
+        ? "Цена неизвестна"
         : formatPrice(fuel.price, fuel.currency), "map-popup-price"));
       fuelList.append(row);
     });

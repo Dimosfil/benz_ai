@@ -282,6 +282,23 @@ test("normalizes ГдеБЕНЗ status details", () => {
   assert.equal(station.confirmations, 4);
 });
 
+test("does not claim a fuel when ГдеБЕНЗ disagrees with its own detail", () => {
+  const station = normalizeGdebenzStation({
+    osm_id: "g1",
+    lat: 51.6927308,
+    lon: 39.3768949,
+    status: "yes",
+    fuels_now: "92,95",
+    detail: "92, ДТ · Очередь ≈5–20 машин",
+  });
+  assert.equal(station.fuelStatus["92"], "available");
+  assert.equal(station.fuelStatus["95"], "no_data");
+  assert.equal(station.fuelStatus.DT, undefined);
+  assert.match(station.detail, /расходятся данные о марках топлива/);
+  assert.match(station.detail, /Очередь ≈5–20 машин/);
+  assert.doesNotMatch(station.detail, /92, ДТ/);
+});
+
 test("normalizes a Multigo place without claiming fuel availability", () => {
   const station = normalizeMultigoStation({
     id: "m1",

@@ -122,7 +122,17 @@ export function stationPriceText(station) {
   return Object.entries(station.prices || {}).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true }))
     .filter(([, price]) => Number.isFinite(Number(price?.value)) && Number(price.value) > 0)
     .map(([type, price]) => `${fuelName(type)} — ${formatPrice(price.value, price.currency)}`)
-    .join(" · ") || "Цены не опубликованы";
+    .join(" · ") || "Нет данных о ценах";
+}
+
+export function stationPriceNote(station) {
+  if (Object.values(station.prices || {}).some((price) => Number(price?.value) > 0)) return "";
+  if (station.yandexOrgId) return "Подтверждённых данных о ценах этой АЗС нет.";
+  const sources = new Set((station.sourceRefs || []).map((ref) => ref.source));
+  if (sources.size && [...sources].every((source) => ["gdebenz", "sber", "tbank", "multigo"].includes(source))) {
+    return "Источники этой АЗС не передают цены.";
+  }
+  return "Подтверждённых данных о ценах этой АЗС нет.";
 }
 
 export function stationFuelEntries(station, selected = []) {

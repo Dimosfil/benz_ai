@@ -8,6 +8,8 @@ import {
   stationFreshText,
   stationFuelEntries,
   stationLastPaymentAt,
+  stationPriceNote,
+  stationPriceText,
   stationQueueText,
   minimumPrice,
 } from "./public/station-view.js";
@@ -23,6 +25,13 @@ test("station fuel entries combine availability and prices", () => {
     { type: "95", status: "no_data", price: 68.5 },
     { type: "DT", status: "not_available", price: null },
   ]);
+});
+
+test("explains missing prices from availability-only station sources", () => {
+  const station = { sourceRefs: [{ source: "gdebenz" }, { source: "sber" }], prices: {} };
+  assert.equal(stationPriceText(station), "Нет данных о ценах");
+  assert.equal(stationPriceNote(station), "Источники этой АЗС не передают цены.");
+  assert.equal(stationPriceNote({ ...station, prices: { 92: { value: 64 } } }), "");
 });
 
 test("minimum price ignores invalid and nonpositive values", () => {
