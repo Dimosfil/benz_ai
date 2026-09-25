@@ -145,6 +145,28 @@ function Write-Detail {
     }
 }
 
+function Get-MigrationVersion {
+    param([Parameter(Mandatory = $true)][string]$MigrationId)
+
+    $match = [regex]::Match($MigrationId, '^(?<version>[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(?:\.[0-9]+)?)__')
+    if (-not $match.Success) { return [version]"0.0" }
+    try { return [version]$match.Groups['version'].Value }
+    catch { return [version]"0.0" }
+}
+
+function Compare-MigrationId {
+    param(
+        [Parameter(Mandatory = $true)][string]$Left,
+        [Parameter(Mandatory = $true)][string]$Right
+    )
+
+    $versionComparison = (Get-MigrationVersion -MigrationId $Left).CompareTo(
+        (Get-MigrationVersion -MigrationId $Right)
+    )
+    if ($versionComparison -ne 0) { return $versionComparison }
+    return [string]::CompareOrdinal($Left, $Right)
+}
+
 if (-not (Test-Path -LiteralPath $InstructionKitPath)) {
     Write-Host "No instruction kit metadata found at $InstructionKitPath."
     Write-Host "Bootstrap this project from the shared instruction library first."
@@ -171,12 +193,63 @@ if (-not $latestVersion) {
 }
 
 $installedVersion = [string]$kit.instruction_kit_version
-$applied = @()
-if ($kit.applied_migrations) {
-    $applied = @($kit.applied_migrations | ForEach-Object { [string]$_ })
+$legacyApplied = @()
+if (($kit.PSObject.Properties.Name -contains "applied_migrations") -and $kit.applied_migrations) {
+    $legacyApplied = @($kit.applied_migrations | ForEach-Object { [string]$_ })
+}
+$appliedThrough = ""
+$additionalApplied = @()
+$skippedMigrations = @()
+if (($kit.PSObject.Properties.Name -contains "migration_state") -and $kit.migration_state) {
+    if ($kit.migration_state.applied_through) {
+        $appliedThrough = [string]$kit.migration_state.applied_through
+    }
+    if ($kit.migration_state.additional_applied_migrations) {
+        $additionalApplied = @($kit.migration_state.additional_applied_migrations | ForEach-Object { [string]$_ })
+    }
+    if ($kit.migration_state.skipped_migrations) {
+        $skippedMigrations = @($kit.migration_state.skipped_migrations | ForEach-Object { [string]$_ })
+    }
+}
+
+function Test-MigrationApplied {
+    param([Parameter(Mandatory = $true)][string]$MigrationId)
+
+    if ($skippedMigrations -contains $MigrationId) {
+        return $false
+    }
+    if ($legacyApplied -contains $MigrationId -or $additionalApplied -contains $MigrationId) {
+        return $true
+    }
+    if ([string]::IsNullOrWhiteSpace($appliedThrough)) { return $false }
+
+    return (Compare-MigrationId -Left $MigrationId -Right $appliedThrough) -le 0
 }
 
 Write-Host "Instruction kit: installed=$installedVersion available=$latestVersion"
+
+$versionComparison = -1
+if ($installedVersion) {
+    try {
+        $versionComparison = ([version]$installedVersion).CompareTo([version]$latestVersion)
+    }
+    catch {
+        if ($installedVersion -eq $latestVersion) {
+            $versionComparison = 0
+        }
+    }
+}
+
+if ($versionComparison -eq 0 -and $skippedMigrations.Count -eq 0) {
+    Write-Host "Pending instruction migrations: 0"
+    exit 0
+}
+
+if ($versionComparison -gt 0) {
+    Write-Host "Accepted source is older than the installed instruction kit."
+    Write-Host "Pending instruction migrations: 0"
+    exit 0
+}
 
 if (-not (Test-Path -LiteralPath $migrationsPath)) {
     Write-Host "No migrations folder found at $migrationsPath."
@@ -185,14 +258,16 @@ if (-not (Test-Path -LiteralPath $migrationsPath)) {
 
 $pending = @(Get-ChildItem -LiteralPath $migrationsPath -Filter "*.md" |
     Where-Object { $_.Name -ne "README.md" } |
-    Sort-Object Name |
     Where-Object {
         $migrationId = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
-        $applied -notcontains $migrationId
-    })
+        -not (Test-MigrationApplied -MigrationId $migrationId)
+    } |
+    Sort-Object `
+        @{ Expression = { Get-MigrationVersion -MigrationId $_.BaseName } }, `
+        @{ Expression = { $_.BaseName } })
 
 if (-not $pending) {
-    Write-Host "No pending instruction migrations."
+    Write-Host "Pending instruction migrations: 0"
     exit 0
 }
 
@@ -219,13 +294,25 @@ if (-not $RecordApplied) {
 Write-Detail "Recording migration metadata only after file changes were applied and verified."
 Write-Detail "If file changes are not complete, stop now and do not record migrations as applied."
 
-$newApplied = @($applied)
-foreach ($migration in $pending) {
-    $newApplied += [System.IO.Path]::GetFileNameWithoutExtension($migration.Name)
-}
+$allMigrationIds = @(Get-ChildItem -LiteralPath $migrationsPath -Filter "*.md" |
+    Where-Object { $_.Name -ne "README.md" } |
+    ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.Name) } |
+    Sort-Object `
+        @{ Expression = { Get-MigrationVersion -MigrationId $_ } }, `
+        @{ Expression = { $_ } })
+$latestMigrationId = if ($allMigrationIds.Count -gt 0) { $allMigrationIds[-1] } else { "" }
 
 $kit.instruction_kit_version = $latestVersion
-$kit | Add-Member -NotePropertyName applied_migrations -NotePropertyValue $newApplied -Force
+$migrationState = [pscustomobject][ordered]@{
+    schema_version = 2
+    applied_through = $latestMigrationId
+    additional_applied_migrations = @()
+    skipped_migrations = @()
+}
+$kit | Add-Member -NotePropertyName migration_state -NotePropertyValue $migrationState -Force
+if ($kit.PSObject.Properties.Name -contains "applied_migrations") {
+    $kit.PSObject.Properties.Remove("applied_migrations")
+}
 $kit | Add-Member -NotePropertyName last_update_check_at -NotePropertyValue (Get-Date -Format "yyyy-MM-ddTHH:mm:ssK") -Force
 $kit | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $InstructionKitPath -Encoding UTF8
 

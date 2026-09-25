@@ -10,10 +10,21 @@ and project commit-message language preferences.
   last mutation and after commit/push. Local and upstream HEAD equality does not
   prove that the worktree is clean. Never report a complete clean finish while
   a new task-scoped diff remains.
-- Never add, stage, commit, or push model weights or checkpoints, photos,
-  video, audio, datasets, archives, or similar large binary content. Keep these
-  payloads outside Git in project-approved artifact or object storage; commit
-  only compact manifests, source URLs, checksums, or retrieval instructions.
-  Inspect untracked and unusually large files before staging. Do not silently
-  remove tracked content or rewrite history. Exceptions require explicit user
-  approval for the exact content and the project-specific Git storage approach.
+- Treat Git finish as finalization of an already established scope, not as a new
+  implementation or repair task. Resolve scope only from the active conversation
+  task or explicit user-selected changes; never classify the whole dirty
+  worktree as one package from apparent similarity. If scope is ambiguous, stop
+  before staging or writes and ask what to include.
+- A failed finish-time check does not by itself authorize product fixes, test
+  rewrites, runtime-state deletion, dependency changes, service restarts, or
+  broad cleanup. Correct only failures caused by the scoped work when the fix is
+  already covered by the original task; otherwise report the blocker.
+- Before staging, inspect untracked and unusually large files. Never add, stage,
+  commit, or push content payloads such as LLM or other model
+  weights/checkpoints, photos, video, audio, datasets, archives, or similar
+  large binary artifacts. Store them outside Git and track only compact
+  manifests, source URLs, checksums, or retrieval instructions. Add an ignore
+  rule during finish only for active-task output or when already authorized;
+  leave unrelated prohibited content unstaged and report it. Proceed only when
+  the user explicitly approves an exact project-specific exception and storage
+  approach.

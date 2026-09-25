@@ -1,186 +1,109 @@
 # Agent Instructions
 
-This is the runtime entrypoint for the Benz AI project.
+This is the lightweight runtime entrypoint for this project. Shared rules live
+in focused modules under `patterns/AGENTS_RUNTIME/`; load only what the task
+needs and prefer more specific project-local instructions, contracts, memory,
+and runbooks over shared defaults.
 
 ## Project
 
-Benz AI is a minimal Node.js web aggregator for gasoline availability at fuel
-stations. The user enters a city or Russian region, and the app shows a regional
-summary plus station data. The server-side entrypoint is `server.js`; static UI
-assets live under `public/`.
+Benz AI is a small Node.js web aggregator for gasoline availability. A user
+searches for a Russian city or region and sees a regional summary and station
+data. `server.js` is the server entrypoint; `public/` holds the UI. Fetch
+stations server-side, surface source limits, and keep local startup simple.
 
-## Project Goal
+## Goal And Loading Contract
 
-Keep the app useful, small, and evidence-backed: fetch station data server-side,
-avoid browser CORS issues, clearly surface source limitations, and preserve a
-simple local run workflow.
+- Derive a bounded goal and observable success criteria from the request and
+  project context. Ask only when missing information materially changes scope;
+  continue independent authorized work while waiting.
+- This file alone is sufficient only for greetings and status-neutral replies.
+  Before concrete work, select the matching runtime modules.
+- For a GI command, run
+  `tools/get-gi-context.ps1 -CommandText "<exact user command>"`. It performs the
+  staged update check, longest-prefix route resolution, and bounded retrieval.
+  Use `COMMANDS.md` directly only for help or command-index requests.
+- On the first concrete task in a session, perform the staged update check even
+  without a GI command. Equal versions with no explicit skipped migrations mean
+  `pending migrations: 0` without reading migration filenames, bodies,
+  `CHANGELOG.md`, or `INDEX.md`. When the
+  accepted source is newer, enumerate and apply pending accepted migrations if
+  enabled; absent `auto_apply_pending_migrations` defaults to `true`. Skip only
+  for explicit `false` or a concrete blocker, and report the pending count.
+  Never inspect `updates/` during this startup check.
+- Treat “do/follow strictly by GI” and equivalents as strict compliance with all
+  loaded rules. Report a blocked operation precisely and continue independent
+  authorized work.
+- Before adding a clarification or approval gate, apply
+  `patterns/AGENTS_RUNTIME/03-rule-precedence.md` and existing authorization.
+- State-changing GI commands must not run from memory. If the context builder,
+  route manifest, resolver, or a mandatory routed file is missing, stop that
+  operation and name the missing path.
 
-Before implementation, derive the task goal and observable success criteria
-from the user's request and relevant project context. A clear bounded task is
-sufficient; do not require a separate project-goal interview or confirmation.
-Ask focused questions only when missing information materially changes the
-result or scope, and continue independent authorized work while waiting.
+## Core Safety And Boundaries
 
-## Loading Contract
+- Verify the active project root and target identity before writes. Treat this
+  root as the normal filesystem boundary; exact external paths and actions need
+  explicit authorization. Preserve unrelated dirty changes.
+- Never commit secrets, private data, model weights, checkpoints, photos, video,
+  audio, datasets, archives, or similar large content payloads. Use approved
+  artifact storage and commit compact manifests, checksums, sources, or
+  retrieval instructions unless the exact exception is explicitly approved.
+- `tools/` is for durable reusable development and agent tooling. Product code,
+  tests, docs, outputs, screenshots, exports, downloaded data, build bundles,
+  and one-off probes belong in documented project locations.
+  `tools/project-memory/` holds compact implementation-driving knowledge and
+  evidence references, not bulk artifacts or a replacement for source/tests.
+- Do not revert user changes without an explicit request. Ask before destructive
+  operations, broad formatting churn, dependency replacement, data migration,
+  public contract changes, or unrelated expansion.
 
-- Start with this file.
-- Read only the modules needed for the current request.
-- Before introducing a clarification or approval gate, apply
-  `patterns/AGENTS_RUNTIME/03-rule-precedence.md` and check existing authorization.
-- Before acting on a concrete task, select and read the matching module(s);
-  this entrypoint alone is enough only for greetings or status-neutral replies.
-- Treat user wording such as "do by GI", "follow GI", "strictly by GI", and
-  equivalent local-language forms as a request for strict compliance with all
-  loaded GI rules. If an applicable rule cannot be followed, stop the affected
-  operation and report the concrete blocker or explicit deferral. Continue
-  independent authorized work without claiming the blocked step is complete.
-- On the first concrete task in a new chat/session, run a quiet GI update check:
-  read `tools/project-memory/instruction-kit.json` and the accepted source
-  `VERSION.md`/`migrations/`, then apply pending accepted migrations. Treat
-  `update_check.enabled: true` as authorization to check and apply; when
-  `auto_apply_pending_migrations` is absent, default it to `true` for backward
-  compatibility. Do not stop at “update available” or defer to `gi update`.
-  Skip application only for an explicit `false` setting or a concrete blocker,
-  name that blocker, and report the pending migration count. Do not read
-  `updates/` for this startup check.
-- If the request contains a GI chat command such as `gi ...`, `ги ...`, `init`,
-  or `инит`, first read `COMMANDS.md` when present, then read every runtime
-  module routed to that command before acting.
-- Prefer project-local instructions, runbooks, contracts, project memory, and
-  service guides over shared defaults when they are more specific.
+## Runtime Routing
 
-## Restore Context
+- Purpose, RAG, memory, summaries, connected projects: `01-purpose.md`
+- Repository map: `02-repository-map.md`; precedence/scope: `03-rule-precedence.md`
+- Authoring, configuration, quality, inventories: `04-content-and-authoring.md`
+- Windows shell/networking: `05-windows-command-policy.md`
+- Token economy and info/stack/logic/refactor: `06-tool-usage-and-token-economy.md`
+- Startup/restore: `07-startup.md`; scope/evidence/cleanup: `07-scope-and-evidence.md`
+- Config: `08-config-service.md`; task manager: `08-task-manager.md`; sprints: `08-sprint.md`
+- Publication: `09-production.md`; deploy: `09-deploy-gateway.md`; FTP: `09-ftp.md`
+- Runtime/restart/defaults: `09-runtime-and-defaults.md`; tests: `09-testing.md`
+- Build/install: `09-build-and-install.md`; memory operations: `09-project-memory-operations.md`
+- Private/missing context: `10-private-scope-and-missing-context.md`
+- Language: `11-language-preferences.md`; UI: `12-ui-and-focus.md`; progress: `13-progress-updates.md`
+- Updates: `14-update-intake.md`; verification: `15-verification.md`; Git: `16-git-policy.md`
+- Roles: `17-agent-role-office.md`; product engineering: `18-startup-product-engineering.md`
+- Game modding: `19-game-modding.md`
 
-For concrete restore/start tasks:
+All paths above are under `patterns/AGENTS_RUNTIME/`. The legacy combined 07/08/09
+files are compatibility indexes only and contain no operational rules.
 
-```powershell
-.\tools\agent-start.ps1
-```
+## Project Memory And Working Areas
 
-If the script is unavailable, read only the smallest useful slices of this file,
-the latest handoff summary in `tools/summary/`, `tools/AGENT_RUNBOOK.md`,
-`tools/AGENT_WORKING_AGREEMENTS.md`, and task-relevant notes under
-`tools/project-memory/`.
+- Source: `server.js`, `domain/`, `providers/`, `services/`, `public/`;
+  tests: `*.test.js` with the Node test runner. Keep outputs and one-off
+  probes outside source and `tools/` in a documented ignored scratch location.
+- Summaries: `tools/summary/`; durable project knowledge:
+  `tools/project-memory/`; reusable tooling: `tools/`.
+- Put product behavior, business rules, workflow contracts, architecture
+  decisions, and verified implementation findings in project memory. Put normal
+  documentation in `README.md`, `docs/`, and runbooks.
+- Preserve text encodings. On Windows, send non-ASCII API/admin write bodies as
+  explicit UTF-8 bytes with `charset=utf-8` or via Node `fetch`, then read back
+  and check for replacement characters or mojibake.
 
-## Runtime Module Routing
+## Local Commands
 
-- Repository purpose, RAG startup, project memory, summaries, connected
-  projects, and shared-rule propagation:
-  `patterns/AGENTS_RUNTIME/01-purpose.md`
-- Repository map: `patterns/AGENTS_RUNTIME/02-repository-map.md`
-- Rule precedence and scope arbitration:
-  `patterns/AGENTS_RUNTIME/03-rule-precedence.md`
-- Authoring reusable rules, configuration boundaries, code quality, project
-  info/stack inventory, and batch verification:
-  `patterns/AGENTS_RUNTIME/04-content-and-authoring.md`
-- Windows shell and networking policy:
-  `patterns/AGENTS_RUNTIME/05-windows-command-policy.md`
-- Token economy, verification command lookup, `gi info`, `gi stack`,
-  `gi logic`, `gi refactor`, feature contracts, and large-output handling:
-  `patterns/AGENTS_RUNTIME/06-tool-usage-and-token-economy.md`
-- Startup, restore, project goal, bug evidence, PDF inspection, repository
-  cleanup, filesystem boundaries, and first-message handling:
-  `patterns/AGENTS_RUNTIME/07-startup-and-scope.md`
-- Config-service, service guide/contract lookup, task manager commands,
-  manager-backed and local sprint commands, and web-service port registration:
-  `patterns/AGENTS_RUNTIME/08-config-service-and-task-manager.md`
-- Dev/prod publication, FTP deploy, build/rebuild, restart/reboot, Docker,
-  first test, full test, default reset, installer packaging, SQL/vector
-  inspection, and project/RAG rebuild commands:
-  `patterns/AGENTS_RUNTIME/09-project-operation-commands.md`
-- Nested repositories, private local app data, `gi logic` external sources,
-  product-plan intent signals, and missing required entities:
-  `patterns/AGENTS_RUNTIME/10-private-scope-and-missing-context.md`
-- Project, commit, task, and response language preferences:
-  `patterns/AGENTS_RUNTIME/11-language-preferences.md`
-- UI focus, app launch focus, and frontend verification expectations:
-  `patterns/AGENTS_RUNTIME/12-ui-and-focus.md`
-- Progress-update style: `patterns/AGENTS_RUNTIME/13-progress-updates.md`
-- Update intake and `updates/` handling:
-  `patterns/AGENTS_RUNTIME/14-update-intake.md`
-- Verification policy: `patterns/AGENTS_RUNTIME/15-verification.md`
-- Git policy: `patterns/AGENTS_RUNTIME/16-git-policy.md`
-- Agent role office, specialist role routing, and narrow professional scopes:
-  `patterns/AGENTS_RUNTIME/17-agent-role-office.md`
-- Startup product engineering, business-first delivery, frontend expectations,
-  and professional communication:
-  `patterns/AGENTS_RUNTIME/18-startup-product-engineering.md`
-- Game modding projects, `gi mod`, and selected game install path handling:
-  `patterns/AGENTS_RUNTIME/19-game-modding.md`
+Use `npm install`, `npm start`, `npm run dev`, `npm test`, and
+`docker compose build` as documented in `README.md` and `package.json`.
 
-## Durable Memory
+## Project-Specific Rules
 
-Durable project knowledge lives in `tools/project-memory/`. Put product
-behavior, business rules, workflow contracts, implementation-driving
-specifications, architecture decisions, and verified findings there.
-
-General project documentation lives in `README.md`, `docs/`, and the runbook.
-Keep overview, visible functionality, stack, commands, operations, and
-troubleshooting there.
-
-## Common Commands
-
-Install dependencies:
-
-```powershell
-npm install
-```
-
-Run:
-
-```powershell
-npm start
-```
-
-Development run:
-
-```powershell
-npm run dev
-```
-
-Test:
-
-```powershell
-npm test
-```
-
-Build:
-
-```powershell
-docker compose build
-```
-
-## Working Areas
-
-- Source: `server.js` and `public/`
-- Tests: Node test runner via `npm test` when tests exist
-- Tools: `tools/` for durable development and agent tooling only
-- Outputs/evidence/build artifacts: keep out of source unless documented
-- Summaries: `tools/summary/`
-- Project memory: `tools/project-memory/`
-
-Do not classify a script as durable tooling merely because it is executable.
-Single-task research probes, exploratory scripts, ad hoc collectors, scrapers,
-and throwaway diagnostics do not belong in `tools/`, including new
-`tools/research`, `tools/probes`, or `tools/scratch` subtrees. Prefer an inline
-command or a documented ignored scratch/temp location outside `tools`; remove
-temporary scripts after use and retain only necessary evidence or outputs.
-
-## Local Rules
-
-- Do not revert user changes unless explicitly requested.
-- Treat dirty worktrees as normal.
-- Keep changes scoped to the current task.
-- Never add, stage, commit, or push model weights or checkpoints, photos,
-  video, audio, datasets, archives, or similar large binary content. Keep such
-  payloads in project-approved artifact or object storage and commit only
-  compact manifests, source URLs, checksums, or retrieval instructions. Before
-  staging, inspect untracked and unusually large files. Do not remove already
-  tracked content or rewrite history without explicit approval for the exact
-  content and project-specific Git storage or cleanup approach.
-- Ask before destructive operations, broad formatting-only churn, dependency
-  replacements, data migrations, public API or storage contract changes, or
-  unrelated scope expansion.
-- Treat `D:\AI\benz_ai` as the filesystem boundary for normal work unless the
-  user gives an explicit concrete path and action.
-- Preserve text encodings when editing files.
+- Do not treat a script as durable tooling merely because it is executable.
+  One-off research, collectors, scrapers, and diagnostics do not belong under
+  `tools/`.
+- Preserve the distinction between probabilistic availability and price.
+  A missing price never means no fuel; a listed price never proves stock.
+- Do not run a background crawler over fuel sources. Request data for the
+  territory selected by the user and report provider failures explicitly.

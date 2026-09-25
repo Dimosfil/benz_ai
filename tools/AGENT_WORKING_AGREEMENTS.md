@@ -94,6 +94,15 @@
   Inspect status, keep unrelated/user changes out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
+- A Git-finish command finalizes only the active task scope already established
+  in the current conversation or an explicit user-selected change set. Never
+  infer that all dirty files are one task from apparent similarity. If scope is
+  ambiguous, stop before staging or writes and ask what to include.
+- Git finish does not authorize new implementation, test-expectation rewrites,
+  runtime-state deletion, dependency changes, service restart/rebuild, or broad
+  cleanup merely to make checks pass. Fix a verification failure only when the
+  scoped work caused it and the original task already authorizes the fix;
+  otherwise report the blocker and leave unrelated state unchanged.
 - Complete every task-scoped tracked write, including handoff and generated
   metadata updates, before staging. After the last commit or push and the last
   filesystem mutation, recheck `git status --short`; for pushes also verify the
@@ -117,19 +126,17 @@
   `gi обновить` update flow when accepted instruction-kit propagation applies.
   Do not include unrelated dirty worktree changes or recurse merely because this
   finish rule itself was added or run.
-- Branch naming: use `codex/` for agent-created branches unless the user asks
-  for another prefix.
-- Generated files policy: do not commit local databases, logs, caches, build
-  outputs, screenshots, raw exports, or one-off artifacts unless a project-local
-  contract explicitly requires a compact manifest or checked-in asset.
-- Never add, stage, commit, or push model weights or checkpoints, photos,
-  video, audio, datasets, archives, or similar large binary content. Store them
-  in project-approved artifact or object storage and commit only compact
-  manifests, source URLs, checksums, or retrieval instructions. Inspect
-  untracked and unusually large files before staging. Do not remove already
-  tracked content or rewrite history without explicit approval for the exact
-  content and project-specific Git storage or cleanup approach.
+- Branch naming: `codex/` unless the user requests another prefix.
+- Generated files policy: keep rebuildable indexes, caches, and runtime outputs
+  ignored; never stage secrets or large binary content payloads.
 - Never commit secrets, credentials, local databases, logs, or caches.
+- Never add, stage, commit, or push content payloads such as LLM or other model
+  weights/checkpoints, photos, video, audio, datasets, archives, or similar
+  large binary artifacts. Keep them outside Git in project-approved artifact or
+  object storage; commit only compact manifests, source URLs, checksums, or
+  retrieval instructions. Inspect untracked and unusually large files before
+  staging and add project-local ignore rules for prohibited content. Require
+  explicit user approval for any exact project-specific exception.
 - Follow `tools/project-memory/git-preferences.json` for commit-message
   languages. English is primary; selected additional languages are included when
   the user explicitly asks the agent to commit.
