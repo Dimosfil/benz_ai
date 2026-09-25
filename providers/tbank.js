@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { bankFetch } from "./bank-http.js";
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
 
 function normalizeStatus(value) {
@@ -41,7 +42,7 @@ function requestSignal(signal) {
 async function fetchPage(bbox, signal) {
   const url = new URL(config.tbank.url);
   url.search = new URLSearchParams(Object.entries(bbox).map(([key, value]) => [key, String(value)])).toString();
-  const response = await fetch(url, { signal: requestSignal(signal), headers: { Accept: "application/json" } });
+  const response = await bankFetch(url, { signal: requestSignal(signal), headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`T-Bank вернул HTTP ${response.status}`);
   const data = await response.json();
   if (data.status !== "ok" || !Array.isArray(data.payload)) throw new Error("Неожиданный ответ T-Bank");

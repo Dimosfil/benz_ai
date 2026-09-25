@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { bankFetch } from "./bank-http.js";
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
 
 let snapshotCache = null;
@@ -127,11 +128,12 @@ function requestHeaders() {
   };
 }
 
-export async function requestAlfaRows(url, fetchImpl = globalThis.fetch) {
+export async function requestAlfaRows(url, fetchImpl = bankFetch) {
+  const signal = AbortSignal.timeout(config.alfa.timeoutMs);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const response = await fetchImpl(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(config.alfa.timeoutMs),
+      signal,
       headers: requestHeaders(),
     });
     rememberCookies(response.headers);
@@ -191,7 +193,7 @@ async function getSnapshot(bbox, fetchImpl) {
   return { ...await snapshotPromise, cached: false };
 }
 
-export async function fetchAlfa(bbox, fetchImpl = globalThis.fetch) {
+export async function fetchAlfa(bbox, fetchImpl = bankFetch) {
   const snapshot = await getSnapshot(bbox, fetchImpl);
   const stations = snapshot.stations.filter((station) => inBbox(station, bbox));
   return {

@@ -142,6 +142,13 @@ function allowRequest(req, bucketName, limit) {
 export function providerFailureMessage(result, source) {
   if (result.status !== "rejected") return null;
   const detail = String(result.reason?.message || "").trim();
+  const code = result.reason?.cause?.code || result.reason?.code || "";
+  if (/CERT|TLS|SSL|UNABLE_TO_VERIFY|SELF_SIGNED/.test(code)) {
+    return `${source}: ошибка проверки TLS-сертификата (${code}).`;
+  }
+  if (/TIMEOUT|ETIMEDOUT/.test(code) || result.reason?.name === "TimeoutError") {
+    return `${source}: превышено время ожидания ответа.`;
+  }
   if (!detail) return `${source}: источник временно недоступен.`;
   if (/failed to fetch|fetch failed|network|econn|enotfound|etimedout/i.test(detail)) {
     return `${source}: не удалось подключиться к источнику.`;
@@ -161,15 +168,15 @@ async function searchStations(bbox, { mode = "full" } = {}) {
 
   const providerFactories = [
     ["T-Bank", (signal) => fetchTbank(bbox, { signal })],
-    ["Alfa AZS", () => alfaProviderCall(bbox)],
+    ["Alfa AZS", () => alfaProviderCall(bbox), null, config.alfa.timeoutMs],
     ["Sber AZS", () => fetchSber(sberWorker, bbox), config.sber.summaryTimeoutMs],
     ["BenzUp", (signal) => fetchBenzup(bbox, { signal })],
     ["ГдеБЕНЗ", (signal) => fetchGdebenz(bbox, { signal })],
     ["Multigo", (signal) => fetchMultigo(bbox, { signal })],
   ];
   const providerTimeoutMs = viewport ? config.viewportProviderTimeoutMs : config.summaryProviderTimeoutMs;
-  const providerPromises = providerFactories.map(([source, factory, summaryTimeoutMs]) => (
-    boundedProviderCall(factory, `ожидание ${source}`, null, viewport ? providerTimeoutMs : summaryTimeoutMs || providerTimeoutMs)
+  const providerPromises = providerFactories.map(([source, factory, summaryTimeoutMs, viewportTimeoutMs]) => (
+    boundedProviderCall(factory, `ожидание ${source}`, null, viewport ? viewportTimeoutMs || providerTimeoutMs : summaryTimeoutMs || providerTimeoutMs)
   ));
   const [tbankResult, alfaResult, sberResult, benzupResult, gdebenzResult, multigoResult] = await Promise.allSettled(providerPromises);
   const tbank = fulfilled(tbankResult);
@@ -360,12 +367,12 @@ async function streamViewportStations(res, bbox) {
   res.once("close", abortStream);
   const providerCalls = [
     ["T-Bank", (signal) => fetchTbank(bbox, { signal })],
-    ["Alfa AZS", () => alfaProviderCall(bbox)],
+    ["Alfa AZS", () => alfaProviderCall(bbox), config.alfa.timeoutMs],
     ["Sber AZS", () => fetchSber(sberWorker, bbox)],
     ["BenzUp", (signal) => fetchBenzup(bbox, { signal })],
     ["ГдеБЕНЗ", (signal) => fetchGdebenz(bbox, { signal })],
     ["Multigo", (signal) => fetchMultigo(bbox, { signal })],
-  ].map(([source, factory]) => ({ source, promise: boundedProviderCall(factory, "ожидание данных", streamController.signal) }));
+  ].map(([source, factory, timeoutMs]) => ({ source, promise: boundedProviderCall(factory, "ожидание данных", streamController.signal, timeoutMs) }));
   let finalStations = [];
   let finalFailures = [];
   try {

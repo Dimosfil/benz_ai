@@ -225,13 +225,23 @@ export class SberBrowserWorker {
     let ready = false;
     for (let attempt = 0; attempt < 40; attempt += 1) {
       await wait(500);
-      ready = Boolean(await this.cdp.evaluate("document.cookie.includes('__jhash_') && document.body?.innerText?.includes('КАРТА ЗАПРАВОК')"));
+      ready = Boolean(await this.cdp.evaluate(`(async()=>{try{
+        const response=await fetch('/api/stations/meta',{signal:AbortSignal.timeout(1500)});
+        if(!response.ok)return false;
+        const data=await response.json();
+        return data.apiVersion===1 && Number.isFinite(data.stationCount);
+      }catch{return false}})()`));
       if (ready) break;
     }
     if (!ready) throw new Error("Sber AZS не завершил браузерную JavaScript-проверку");
     this.lastError = null;
     this.lastStartedAt = new Date().toISOString();
     this.lastStopReason = null;
+    this.ensureRefreshTimer();
+  }
+
+  ensureRefreshTimer() {
+    if (this.timer) return;
     this.timer = setInterval(() => this.refreshActiveAreas().catch((error) => { this.lastError = error; }), this.refreshMs);
     this.timer.unref();
   }
@@ -289,21 +299,41 @@ export class SberBrowserWorker {
       area.accessedAt = Date.now();
       if (!area.data || Date.now() - area.fetchedAt >= this.refreshMs) await this.refreshArea(area);
       if (!area.data && area.error) throw area.error;
-      return { ...area.data, fetchedAt: area.fetchedAt, browser: true };
+      return { ...area.data, fetchedAt: area.fetchedAt, browser: Boolean(this.cdp) };
     } finally {
       this.endOperation();
     }
   }
 
   async refreshArea(area) {
-    await this.ensureStarted();
+    if (area.pending) return area.pending;
+    area.pending = this.loadArea(area).finally(() => { area.pending = null; });
+    return area.pending;
+  }
+
+  async loadArea(area) {
     const bbox = [area.bbox.minLon, area.bbox.minLat, area.bbox.maxLon, area.bbox.maxLat].join(",");
     const expression = `(async()=>{const response=await fetch(${JSON.stringify(`/api/stations?bbox=${bbox}`)},{headers:{Accept:"application/json"},signal:AbortSignal.timeout(${this.requestTimeoutMs})});const text=await response.text();if(!response.ok)throw new Error("Sber HTTP "+response.status);let data;try{data=JSON.parse(text)}catch{throw new Error("Sber вернул не JSON")};return data})()`;
     try {
-      area.data = await this.cdp.evaluate(expression);
+      const response = await fetch(`https://sberazs.ru/api/stations?bbox=${bbox}`, {
+        headers: { Accept: "application/json" }, signal: AbortSignal.timeout(this.requestTimeoutMs),
+      });
+      const body = await response.text();
+      let data;
+      if (/^\s*</.test(body) && /__jhash_|challenge|javascript|<script/i.test(body)) {
+        await this.ensureStarted();
+        data = await this.cdp.evaluate(expression);
+      } else {
+        if (!response.ok) throw new Error(`Sber HTTP ${response.status}`);
+        try { data = JSON.parse(body); }
+        catch { throw new Error("Sber AZS вернул не JSON"); }
+      }
+      if (!Array.isArray(data?.stations)) throw new Error("Sber AZS вернул неизвестный формат ответа");
+      area.data = data;
       area.fetchedAt = Date.now();
       area.error = null;
       this.lastError = null;
+      this.ensureRefreshTimer();
     } catch (error) {
       area.error = error;
       this.lastError = error;
@@ -330,6 +360,10 @@ export class SberBrowserWorker {
         }
       } finally {
         this.endOperation();
+        if (!this.areas.size && !this.cdp && this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
       }
     })();
     this.refreshing = refresh;
