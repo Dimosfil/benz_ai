@@ -46,10 +46,29 @@ variables, service discovery, or deployment metadata.
   committed examples unless the file is explicitly a local-only example.
 - When a configured value is a path, resolve it to an absolute path at startup
   or at the I/O boundary, validate that it is within the allowed workspace or
-  configured data root, and fail with a clear message if it is missing or unsafe.
+  configured data root, and reject it with a clear message if it is missing or
+  unsafe. Apply the optional-versus-critical failure policy below after
+  rejecting the value.
 - Prefer typed config loading and schema validation when the stack supports it.
   At minimum, validate required keys, path shape, URL shape, numeric ranges, and
   enum values before using the config.
+- Classify each external setting by the capability that needs it. Give every
+  optional setting a documented safe default, including an explicit disabled
+  state for an unconfigured integration. Validate environment and secret-store
+  overrides before use; a missing, malformed, or unusable optional value must
+  disable only its dependent capability, not terminate the core service or
+  trigger a container restart loop. Apply the same isolation when a provider
+  rejects an optional credential at runtime. Never use a placeholder credential
+  as a working default or silently enable a capability with an invalid value.
+- Expose optional capability availability to the backend and UI. Enforce the
+  disabled state on the backend, make the corresponding control unavailable in
+  the UI, and explain the configuration problem without exposing secret values.
+  Emit a concise, sanitized diagnostic so operators can restore the feature.
+- Identify startup-critical settings in the project run contract, such as the
+  service's required backend or database connection. Do not invent defaults or
+  hide invalid values for these settings: fail startup with a clear, sanitized
+  error. During development, check their presence and validity in local startup
+  and relevant tests or preflight checks, including missing and malformed cases.
 - Keep language translation maps, synonym dictionaries, stemming/normalization
   rules, prompt templates, query expansions, ranking thresholds,
   intent-interpretation behavior, and model-specific compatibility rules in
@@ -99,3 +118,7 @@ as a refactoring task, not only a documentation update:
   rejected when outside the allowed project or data boundary.
 - Confirm old independent defaults were removed, generated from the same source,
   or recorded as explicit follow-up drift with an owner and verification path.
+- Check missing and malformed optional values: the core remains healthy, the
+  dependent backend action and UI control are unavailable, and diagnostics do
+  not reveal secrets. Check that invalid startup-critical values fail with a
+  clear diagnostic before the service is reported healthy.

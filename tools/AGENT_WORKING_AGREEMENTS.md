@@ -52,6 +52,15 @@
   work, update the relevant project-memory specification in the same scoped
   change. Write it so another agent could rebuild the behavior on a different
   language, framework, or platform. A handoff summary is not a substitute.
+- During such work, compare changed behavior with the relevant spec, source,
+  tests, and affected docs. Capture branches, failure handling, invariants, and
+  architecture decisions in focused specs, or confirm the existing spec covers
+  them, before the implementation task is complete. Git finish does not repeat
+  this product-contract audit.
+- Mark current, planned, and historical behavior clearly in affected specs;
+  support current-implementation claims with a last-check date and source or
+  test paths. When adding, renaming, moving, or retiring a spec, update its
+  project-memory index entry and verify the relative link in the same change.
 - Keep project documentation separate from project memory. Put overview,
   user-visible functionality, stack, commands, operations, and troubleshooting
   in `README.md`, `docs/`, or the runbook. Put algorithms, business rules,
@@ -83,7 +92,17 @@
 
 ## Git
 
+- Keep rebuildable builds, frontend bundles, installers, and intermediate
+  output in dedicated ignored directories; exclude them from staging, commits,
+  and pushes to source repositories unless an exact project-specific exception
+  is explicitly approved. Keep source and build inputs versioned. Follow
+  `patterns/AGENTS_RUNTIME/09-build-and-install.md` for authorized output-layout
+  cleanup, index removal that preserves local files, and clean-checkout checks.
 - Default: the agent edits and verifies; the user reviews and commits.
+- This default permits agent commits on explicit GI Git-finish commands below.
+  If a project intentionally forbids all agent commits, state that exception
+  explicitly and report `gi пуш` as blocked rather than treating it as a
+  push-only command or asking the user to commit and retry it.
 - Treat `gi коммит`, `gi пуш`, `gi коммит пуш`, and `gi только пуш` as explicit
   git finish requests. `gi коммит` commits scoped current changes only; `gi пуш`
   and `gi коммит пуш` commit scoped current changes and push the current branch;
@@ -91,13 +110,23 @@
   Do not reinterpret `gi пуш` as a raw `git push`, a retry of a previous
   terminal push, or a push-only command; if there are no scoped changes to
   commit, report that clearly instead of falling back to push-only behavior.
-  Inspect status, keep unrelated/user changes out, follow commit-message
+  Inspect status, keep changes outside the resolved scope out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
-- A Git-finish command finalizes only the active task scope already established
-  in the current conversation or an explicit user-selected change set. Never
-  infer that all dirty files are one task from apparent similarity. If scope is
-  ambiguous, stop before staging or writes and ask what to include.
+- For a branch without an upstream, obtain the intended remote branch before
+  staging or committing for a push, then set tracking on the first push. Do not
+  infer the target from another branch that happens to contain the same HEAD.
+- Resolve commit scope from explicit user-selected changes, then the active
+  conversation task. With neither, standalone `gi commit`, `gi push`, and
+  `gi commit push` (including Russian aliases) select the current repository's
+  eligible tracked and untracked changes, including pre-existing user changes.
+  Apply this command-defined scope in a new chat without asking whether to
+  include all changes solely because history is absent or many files are dirty.
+  Inspect and briefly report scope and exclusions before staging; exclude
+  secrets, prohibited content, generated noise, and work reserved separately.
+  Do not expand an active task from apparent file similarity. Ask only about
+  concrete conflicting scope instructions or inseparable excluded changes.
+  `gi only push` never selects working-tree files.
 - Git finish does not authorize new implementation, test-expectation rewrites,
   runtime-state deletion, dependency changes, service restart/rebuild, or broad
   cleanup merely to make checks pass. Fix a verification failure only when the
@@ -126,9 +155,8 @@
   `gi обновить` update flow when accepted instruction-kit propagation applies.
   Do not include unrelated dirty worktree changes or recurse merely because this
   finish rule itself was added or run.
-- Branch naming: `codex/` unless the user requests another prefix.
-- Generated files policy: keep rebuildable indexes, caches, and runtime outputs
-  ignored; never stage secrets or large binary content payloads.
+- Branch naming: `TODO`.
+- Generated files policy: `TODO`.
 - Never commit secrets, credentials, local databases, logs, or caches.
 - Never add, stage, commit, or push content payloads such as LLM or other model
   weights/checkpoints, photos, video, audio, datasets, archives, or similar
@@ -364,25 +392,22 @@ or:
   test commands and produce a compact verification plan for the current feature,
   bug fix, or release check. Plan first; run checks only when the user asks or
   when the current task already requires verification.
-- Treat `gi test task`, `gi testing task`, `gi тест таск`, `ги тест таск`, and
-  equivalent wording as requests to set the active release/full-system
-  verification workload for the current project. The supplied task text is the
-  scenario for the next `gi test`, not evidence that the scenario already
-  passed.
-- Treat `gi test`, `ги тест`, `gi full test`, `gi release test`, and equivalent
-  full-project test wording as requests to run the documented verification flow
-  against the active test task. Do not confuse this with `gi test plan`, which
-  remains plan-only by default. Dry-runs, simulations, dispatcher-only runs,
-  replayed logs, mock-only checks, and compile/unit-only checks are diagnostics
-  only and must not be run during `gi test` unless the user explicitly asks for
-  that diagnostic mode; they must never be reported as a passed `gi test`.
-  Exercise the documented live runtime surface for the selected task, including
-  apps, backend/API, storage, queues/workers, UI/auth, service discovery,
-  orchestrator or agent handoff loops, and health/contract endpoints when the
-  project defines them. If the live system cannot be started or reached, report
-  `gi test` as blocked or not checked. Old summaries, screenshots, completed
-  demos, previous task statuses, and old chat snippets are evidence only; rerun
-  the current documented checks or report the exact blocker.
+- Treat `gi test` / `ги тест` as information about the tester and local scenarios,
+  settings, prerequisites, and gaps; do not execute or mutate runtime state.
+- Treat `gi test start` / `ги тест старт` as execution of the selected local
+  scenario. `gi test task` / `ги тест таск` selects its workload without running.
+  Follow `patterns/AGENTS_RUNTIME/09-testing.md` for authorization, evidence,
+  checkpoint/resume, restoration, and completion states. Projects own scenario
+  modes, settings, links, roles, inputs, commands, and artifact locations.
+- Include content entry when the selected test needs it: resolve authorized
+  material or permitted synthetic inputs, validate case/field mapping, confirm
+  acceptance, and track introduced content through cleanup/restoration. Keep
+  content values and source paths local; do not invent real IDs or links.
+- Use `gi full test`, `gi release test`, or `gi system test` for full-system
+  verification, following `patterns/AGENTS_RUNTIME/09-full-testing.md` as well.
+  Apply full-system resets only to that flow; an observational scenario uses
+  its own state contract. Old evidence and mocked/partial checks do not prove
+  a fresh live full-system run.
 - For verification plans and smoke checks, confirm exact CLI flags, ports,
   routes, methods, JSON payload fields, and required environment variables from
   current local instructions, manifests, config, or source code. Summaries and

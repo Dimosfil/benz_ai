@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { bankFetch } from "./bank-http.js";
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
+import { latestServiceReport, recentPaymentTimes, serviceReportFromText } from "../public/station-evidence.js";
 
 function normalizeStatus(value) {
   return new Set(["available", "maybe_available", "not_available", "no_data"]).has(value) ? value : "no_data";
@@ -14,6 +15,10 @@ export function normalizeTbankStation(station) {
     .map(([fuel, status]) => [normalizeFuelName(fuel), normalizeStatus(status)])
   );
   const overallStatus = normalizeStatus(station.status);
+  const events = Array.isArray(station.recentEvents) ? station.recentEvents : [];
+  const serviceReport = latestServiceReport(Object.fromEntries(events
+    .filter((event) => event && event.type !== "transaction")
+    .map((event, index) => [index, serviceReportFromText(event.text, event.lastUpdatedAt)])));
   return {
     source: "tbank",
     sourceRefs: [{ source: "tbank", externalId }],
@@ -24,7 +29,12 @@ export function normalizeTbankStation(station) {
     lon: Number(station.lon),
     overallStatus,
     fuelStatus,
-    availabilityBySource: { tbank: { overallStatus, fuelStatus, observedAt: station.lastTransactionAt || null } },
+    availabilityBySource: { tbank: { overallStatus, fuelStatus, observedAt: station.lastTransactionAt || null,
+      paymentTimes: recentPaymentTimes([station.lastTransactionAt,
+        ...events
+          .filter((event) => event?.type === "transaction").map((event) => event.lastUpdatedAt)]),
+      ...(serviceReport ? { serviceStatus: serviceReport.status, serviceObservedAt: serviceReport.observedAt, serviceReason: serviceReport.reason } : {}),
+    } },
     confidence: typeof station.confidence === "number" ? station.confidence : null,
     lastTransactionAt: station.lastTransactionAt || null,
     prices: {},

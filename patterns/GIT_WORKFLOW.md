@@ -18,6 +18,12 @@ language preferences.
 - `gi коммит пуш` means the same as `gi пуш`.
 - `gi только пуш` means push existing local commits only; do not create a new
   commit for this command.
+- A project-local statement that the user normally creates commits is a default,
+  not a veto of these explicit commands. If a project instead unconditionally
+  forbids agent-created commits, follow that specific rule and report that
+  `gi пуш` cannot complete until the project rule changes. Do not advise a
+  manual commit followed by `gi пуш`: that command does not fall back to
+  push-only behavior.
 - Do not reinterpret `gi пуш` as a raw `git push`, a retry of a previous
   terminal push, or a push-only command. Push-only behavior is reserved for
   `gi только пуш`.
@@ -44,19 +50,40 @@ language preferences.
   migrations, version/changelog, and local instruction-kit metadata in sync.
 - Treat dirty worktrees as normal.
 - Do not revert user changes unless the user explicitly asks.
-- Keep changes scoped to the current task.
+- Keep changes scoped to the current task or the standalone command's scope.
 - A Git-finish command authorizes Git finalization, compact read-only inspection,
-  and proportionate verification of an already established task scope. It does
+  and proportionate verification of the resolved commit scope. It does
   not authorize new product implementation, test-expectation rewrites, runtime
   or service repair, dependency changes, broad cleanup, or other tracked-file
   edits merely to make the worktree or verification clean.
-- Derive finish scope only from the active task in the current conversation or
-  an explicit user-selected path/change set. Never infer that all dirty files
-  form one task because they appear related, were modified recently, or can be
-  made to pass together. If no unambiguous active task scope exists, stop before
-  staging or writes and ask the user to identify what should be committed.
+- Resolve commit scope in order: explicit user-selected paths/changes, the active
+  conversation task, then the standalone command's repository scope. With no
+  selected paths or active task, `gi commit`, `gi push`, and `gi commit push`
+  (including Russian aliases) select all current eligible tracked and untracked
+  changes in the verified repository. Apply this default in a new chat without
+  asking whether to include all changes solely because history is absent or the
+  dirty file count is large. Inspect the selected changes and briefly report
+  scope and exclusions before staging. Exclude secrets, prohibited content,
+  generated noise, and work explicitly reserved separately.
+  Never infer that all dirty files belong to an active task from similarity or
+  timestamps. Ask only when concrete
+  conflicting scope instructions or inseparable excluded changes prevent safe
+  selection. `gi only push` does not select working-tree changes.
 - Do not commit secrets, credentials, local databases, logs, or generated
   caches.
+- Keep rebuildable application builds, frontend bundles, installers, and
+  intermediate build output in dedicated ignored directories. Do not add,
+  stage, commit, or push them to source repositories without an explicit
+  approved project-specific exception. Keep source, required source assets,
+  manifests, lockfiles, build configuration, and build/packaging scripts
+  versioned. Follow `patterns/AGENTS_RUNTIME/09-build-and-install.md` for
+  output layout, tracked-output cleanup, and clean-checkout verification.
+- Exclude build output during Git finish, including already tracked output
+  changes; allow scoped index removals from authorized output cleanup.
+  Do not mistake generated code or database migrations for build
+  artifacts. Git finish alone does not authorize moving output, changing
+  build/deployment paths, or removing unrelated tracked files from the index;
+  complete that work during an authorized implementation/cleanup task.
 - Never add, stage, commit, or push content payloads such as LLM or other model
   weights/checkpoints, photos, video, audio, datasets, archives, or similar
   large binary artifacts. Keep them in project-approved artifact or object
@@ -81,16 +108,20 @@ Before any `gi коммит`, `gi пуш`, `gi коммит пуш`, or `gi то
   change was already authorized, otherwise leave it unstaged and report it;
 - inspect staged and unstaged changes with compact stats or targeted checks;
 - identify the current branch and configured remote;
-- keep user/unrelated changes out of the commit;
+- for a push, identify the upstream before staging or committing. If it is
+  absent, ask which remote branch to use and set tracking on the first push;
+  never infer the destination from another remote branch containing HEAD;
+- keep changes outside the resolved scope out of the commit; pre-existing user
+  changes are eligible under the standalone repository scope unless excluded;
 - stop and explain the blocker if scope is ambiguous, conflicts are present,
   secrets may be included, the project is not a git repository, no remote is
   configured for a push, or push fails.
-- Run project-local mandatory verification gates only when they apply to the
-  established scope. A failing check authorizes a correction only when the
-  failure was caused by that scoped work and the correction is already within
-  the original task authorization. Otherwise report the failure and stop the
-  finish; do not repair unrelated code or tests, delete runtime state, or
-  rebuild/restart services solely because `gi пуш` was requested.
+- Do not start a project-memory audit, feature work, or new product test cycle
+  solely because Git finish was requested. Implementation work completes its
+  own writeback and verification. Follow a more specific project-local
+  finish-time gate when one is expressly required; a failing gate does not
+  authorize unrelated code or test repairs, runtime deletion, or service
+  rebuilds/restarts.
 
 For `gi коммит`:
 

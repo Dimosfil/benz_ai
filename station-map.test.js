@@ -251,7 +251,7 @@ test("map marker status follows the selected fuel aggregation", () => {
       sber: { overallStatus: "available", fuelStatus: { 92: "not_available", 95: "available" } },
     },
   };
-  assert.equal(stationMapStatus(station, []), "available");
+  assert.equal(stationMapStatus(station, []), "maybe_available");
   assert.equal(stationMapStatus(station, ["92"]), "not_available");
   assert.equal(stationMapStatus(station, ["92", "95"]), "maybe_available");
 });
@@ -339,7 +339,7 @@ test("a lone availability source explains the yellow status instead of showing 1
 
   assert.match(source, /confidence && confidence\.total >= 2/);
   assert.match(source, /confidence\?\.total === 1/);
-  assert.match(source, /Есть только один актуальный сигнал о наличии/);
+  assert.match(source, /Есть только один сигнал о возможном наличии/);
 });
 
 test("map activation cancels stale hidden requests before loading the visible viewport", async () => {

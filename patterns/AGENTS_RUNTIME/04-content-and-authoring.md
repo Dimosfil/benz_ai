@@ -85,6 +85,13 @@
   source of truth or temporary compatibility layer is genuinely undocumented.
   Follow
   `patterns/CONFIGURATION_BOUNDARIES.md`.
+- Classify external variables as startup-critical or optional by their actual
+  dependency. Give optional variables safe defaults, validate overrides, and
+  disable only the dependent backend/UI capability when an optional value is
+  absent or invalid. Keep the core running and surface a sanitized reason;
+  never use dummy credentials as valid defaults. Fail clearly for invalid
+  startup-critical values and cover them in local startup and tests. Follow
+  `patterns/CONFIGURATION_BOUNDARIES.md`.
 - Treat API keys and external-service tokens as secret boundaries, not ordinary
   config values. Keep them out of source, client bundles, public frontend env
   vars, logs, traces, chat, generated artifacts, and project memory; prefer
@@ -97,12 +104,17 @@
   working on every independent step that can be completed without exposing or
   unsafely persisting the credential. Block or leave unverified only the
   specific operation that has no safe credential path.
-- Build applications with clear architecture and code-quality boundaries. Apply
-  OOP, SOLID, DRY, clean-code, maintainability, and extensibility principles
-  where they fit the stack. Keep domain/product logic, orchestration, UI,
-  persistence, filesystem, external services, and configuration in separate
-  layers with explicit contracts. Follow
+- Build applications with clear architecture and code-quality boundaries.
+  Choose the paradigm that fits the stack; apply SOLID, DRY, KISS, YAGNI, and
+  separation of concerns to classes, modules, functions, components, or systems
+  where they help. Keep domain/product logic, orchestration, UI, persistence,
+  filesystem, external services, and configuration behind explicit boundaries.
+  Record measurable quality goals and significant architecture tradeoffs. Follow
   `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`.
+- For large modular systems, keep a project-local system map, module passports,
+  and public contracts. Coordinate agents through those contracts and verify an
+  assembled workflow. A module need not be a deployable service. Follow
+  `patterns/MODULAR_SERVICE_ENGINEERING.md`.
 - Treat senior agent behavior as a compact engineering execution standard, not
   as a separate personality label. Before code changes, agents should load
   relevant local context, preserve intended behavior, keep architecture and

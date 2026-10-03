@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
+import { serviceReportFromText } from "../public/station-evidence.js";
 
 const cache = new Map();
 
@@ -68,6 +69,7 @@ export function normalizeGdebenzStation(station) {
         observedAt: lastTransactionAt,
         rawStatus: station.status || null,
         detail,
+        ...serviceReportFromText(detail, lastTransactionAt),
         confirmations: Number(station.confirmations) || 0,
         confidence: Number(station.confidence_base) || 0,
       },

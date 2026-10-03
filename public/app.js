@@ -370,12 +370,13 @@ function renderBuildInfo(build) {
   buildInfoNode.title = knownCommit ? build.commit : "";
 }
 
-function renderStations() {
+function renderStations({ refreshEvidence = false } = {}) {
   const selectedFuel = selectedFuels();
   const selectedStatus = selectedStatuses();
   const filtered = filterStations(allStations, { fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const sorted = sortStations(filtered, selectedFuel);
-  stationMap.setFilters({ fuels: selectedFuel, statuses: selectedStatus, text: query.value });
+  if (refreshEvidence) stationMap.refreshEvidence();
+  else stationMap.setFilters({ fuels: selectedFuel, statuses: selectedStatus, text: query.value });
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   currentPage = Math.min(currentPage, totalPages);
   const firstIndex = (currentPage - 1) * pageSize;
@@ -617,3 +618,19 @@ fetchJson("/api/health").then((data) => renderBuildInfo(data.build)).catch(() =>
 mapSection.hidden = false;
 stationMap.locateUser();
 loadSummary();
+
+function refreshEvidenceAge() {
+  if (document.hidden) return;
+  renderStations({ refreshEvidence: true });
+  if (!summaryDetails.hidden) {
+    const statuses = allStations.map((station) => selectionStatus(station));
+    const cards = document.querySelector("#summary-cards").children;
+    if (cards.length >= 3) {
+      cards[1].querySelector("strong").textContent = statuses.filter((status) => status === "available").length;
+      cards[2].querySelector("strong").textContent = statuses.filter((status) => status === "maybe_available").length;
+    }
+  }
+}
+// Recalculate existing evidence locally; this never requests fuel sources.
+setInterval(refreshEvidenceAge, 30_000);
+document.addEventListener("visibilitychange", refreshEvidenceAge);

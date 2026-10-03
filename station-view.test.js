@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   selectionStatus,
   hasRecentCrowdConfirmation,
-  hasRecentPaymentConfirmation,
   stationConfidence,
   stationFreshText,
   stationFuelEntries,
@@ -111,7 +110,7 @@ test("turns matching but two-hour-old positive signals yellow", () => {
   assert.equal(selectionStatus(station, ["92"]), "maybe_available");
 });
 
-test("uses a bank payment younger than 30 minutes as a green station confirmation", () => {
+test("keeps a lone recent bank operation yellow without claiming current service", () => {
   const observedAt = new Date(Date.now() - 29 * 60_000).toISOString();
   const station = {
     overallStatus: "maybe_available",
@@ -121,10 +120,10 @@ test("uses a bank payment younger than 30 minutes as a green station confirmatio
     },
   };
 
-  assert.equal(hasRecentPaymentConfirmation(station, Date.parse(observedAt) + 30 * 60_000), true);
-  assert.equal(hasRecentPaymentConfirmation(station), true);
-  assert.equal(selectionStatus(station), "available");
+  assert.equal(selectionStatus(station), "maybe_available");
   assert.equal(selectionStatus(station, ["95"]), "maybe_available");
+  assert.match(stationFreshText(station), /Alfa AZS.*29 мин назад/);
+  assert.match(stationFreshText(station), /Работа колонок сейчас не подтверждена/);
 });
 
 test("turns a lone bank payment older than 30 minutes yellow", () => {
@@ -137,7 +136,6 @@ test("turns a lone bank payment older than 30 minutes yellow", () => {
     },
   };
 
-  assert.equal(hasRecentPaymentConfirmation(station), false);
   assert.equal(selectionStatus(station), "maybe_available");
 });
 
@@ -164,7 +162,8 @@ test("shows recent corroborated Yandex availability and queue", () => {
   assert.equal(hasRecentCrowdConfirmation(station, ["92"]), false);
   assert.equal(selectionStatus(station), "available");
   assert.equal(selectionStatus(station, ["95"]), "available");
-  assert.equal(stationQueueText(station), "Большая очередь · 3 подтверждения");
+  assert.match(stationQueueText(station), /Большая очередь · Яндекс Карты · 28 мин назад · 3 подтверждения/);
+  assert.match(stationQueueText(station), /Ожидание сейчас может отличаться/);
 });
 
 test("keeps a 50 percent signal yellow", () => {
@@ -189,17 +188,41 @@ test("shows the latest bank payment without treating a crowd report as payment",
   };
 
   assert.equal(stationLastPaymentAt(station), "2026-07-15T11:30:00.000Z");
-  assert.match(stationFreshText(station), /^⚠ Последняя оплата: /);
-  assert.match(stationFreshText(station), /подтверждение устарело/);
+  assert.match(stationFreshText(station), /^⚠ Последняя операция по данным Sber AZS: /);
+  assert.match(stationFreshText(station), /данные устарели/);
 });
 
-test("explains when a recent payment still supports availability", () => {
+test("attributes recent operations without claiming fuel was dispensed", () => {
   const observedAt = new Date(Date.now() - 15 * 60_000).toISOString();
   const text = stationFreshText({
     availabilityBySource: { alfa: { observedAt } },
     priceUpdatedAt: null,
   });
 
-  assert.match(text, /^Последняя оплата: /);
-  assert.match(text, /подтверждено 15 мин назад/);
+  assert.match(text, /^Последняя операция по данным Alfa AZS: /);
+  assert.match(text, /МСК · 15 мин назад/);
+  assert.doesNotMatch(text, /подтверждено/);
+});
+
+test("does not present an old, undated or future queue estimate as current", () => {
+  const station = (observedAt) => ({ availabilityBySource: { yandex: { queueLabel: "Очередь 15–30 мин", observedAt } } });
+  const stale = stationQueueText(station(new Date(Date.now() - 61 * 60_000).toISOString()));
+  assert.match(stale, /данные устарели.*Яндекс Карты · 1 ч 1 мин назад/);
+  assert.doesNotMatch(stale, /15–30/);
+  for (const time of [null, "invalid", new Date(Date.now() + 10 * 60_000).toISOString()]) {
+    assert.match(stationQueueText(station(time)), /время сообщения неизвестно/);
+    assert.doesNotMatch(stationQueueText(station(time)), /15–30/);
+  }
+});
+
+test("chooses the latest valid queue report and bank operation independently", () => {
+  const now = Date.now();
+  const station = { availabilityBySource: {
+    tbank: { observedAt: new Date(now - 27 * 60_000).toISOString() },
+    alfa: { observedAt: new Date(now - 97 * 60_000).toISOString() },
+    yandex: { queueLabel: "Очередь 15–30 мин", observedAt: new Date(now - 28 * 60_000).toISOString() },
+    gdebenz: { queueLabel: "Большая очередь", observedAt: new Date(now - 2 * 60_000).toISOString() },
+  } };
+  assert.match(stationFreshText(station), /Последняя операция по данным T‑Bank Fuel/);
+  assert.match(stationQueueText(station), /Большая очередь · ГдеБЕНЗ · 2 мин назад/);
 });

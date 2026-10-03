@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { bankFetch } from "./bank-http.js";
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
+import { recentPaymentTimes } from "../public/station-evidence.js";
 
 let snapshotCache = null;
 let snapshotPromise = null;
@@ -78,7 +79,8 @@ export function normalizeAlfaStation(station) {
     overallStatus,
     fuelStatus: statuses,
     availabilityBySource: {
-      alfa: { overallStatus, fuelStatus: statuses, observedAt: lastTransactionAt },
+      alfa: { overallStatus, fuelStatus: statuses, observedAt: lastTransactionAt,
+        paymentTimes: recentPaymentTimes(observedAt) },
     },
     confidence: null,
     lastTransactionAt,

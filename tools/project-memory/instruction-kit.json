@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.09.22.6",
+  "instruction_kit_version": "2026.10.03.3",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
@@ -57,11 +57,17 @@
     "patterns/DEVELOPMENT_TOOL_PRODUCT_BOUNDARIES.md",
     "patterns/EXTERNAL_DOCUMENTATION_RETRIEVAL.md",
     "patterns/GI_COMMAND_CONTRACTS.md",
+    "patterns/GIT_WORKFLOW.md",
+    "patterns/MODULAR_SERVICE_ENGINEERING.md",
     "patterns/PROJECT_DEV_PROD_SERVICES.md",
     "patterns/PROJECT_DOCUMENTATION_LAYERS.md",
+    "patterns/PROJECT_MEMORY_SPECIFICATIONS.md",
     "patterns/QUERY_PROMPT_NORMALIZATION_BOUNDARIES.md",
     "patterns/STARTUP_PRODUCT_ENGINEERING.md",
     "patterns/TECHNOLOGY_STACK_INVENTORY.md",
+    "templates/MODULE_CONTRACT.template.md",
+    "templates/MODULE_PASSPORT.template.md",
+    "templates/SYSTEM_MAP.template.md",
     "templates/TECHNOLOGY_STACK.template.md",
     "tools/AGENT_RUNBOOK.md",
     "tools/AGENT_WORKING_AGREEMENTS.md",
@@ -84,13 +90,17 @@
     "tools/resolve-gi-command.ps1",
     "tools/select-git-commit-languages.ps1",
     "tools/select-project-language.ps1",
-    "tools/select-system-language.ps1"
+    "tools/select-system-language.ps1",
+    "patterns/AGENTS_RUNTIME/09-full-testing.md",
+    "templates/PROJECT_TESTING.template.md"
   ],
   "migration_state": {
     "schema_version": 2,
-    "applied_through": "2026.09.22.6__keep_git_finish_within_established_scope",
+    "applied_through": "2026.10.03.3__add_project_test_content_contract",
     "additional_applied_migrations": [],
-    "skipped_migrations": []
+    "skipped_migrations": [
+      "2026.09.28.1__isolate_optional_config_failures"
+    ]
   },
-  "last_update_check_at": "2026-09-25T14:20:50+03:00"
+  "last_update_check_at": "2026-10-03T16:08:37.139Z"
 }

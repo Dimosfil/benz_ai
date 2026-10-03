@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import { buildInfo } from "./build-info.js";
 import { readFreshCache, writeBoundedCache } from "./domain/bounded-cache.js";
 import { inGeoBoundary, mergeStations, summarizeStations } from "./domain/stations.js";
+import { StationObservations } from "./domain/station-observations.js";
 import { clearAlfaCache, fetchAlfa } from "./providers/alfa.js";
 import { clearBenzupCache, fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
 import { clearGdebenzCache, fetchGdebenz } from "./providers/gdebenz.js";
@@ -32,6 +33,7 @@ export { normalizeFuelName } from "./domain/stations.js";
 const PUBLIC_DIR = join(process.cwd(), "public");
 const resultCache = new Map();
 const viewportStreamCache = new Map();
+const stationObservations = new StationObservations();
 const sberWorker = new SberBrowserWorker(config.sber);
 const requestBuckets = new Map();
 const securityHeaders = Object.freeze({
@@ -164,7 +166,7 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   const viewport = mode === "viewport";
   const key = `${mode}:${JSON.stringify(bbox)}`;
   const saved = readFreshCache(resultCache, key, config.resultCacheTtlMs);
-  if (saved) return { ...saved, cached: true };
+  if (saved) return { ...saved, stations: mergeStations(stationObservations.observe(saved.stations)), cached: true };
 
   const providerFactories = [
     ["T-Bank", (signal) => fetchTbank(bbox, { signal })],
@@ -214,11 +216,11 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   else warnings.push(providerFailureMessage(multigoResult, "Multigo"));
   if (multigo?.truncated) warnings.push(`Multigo вернул лимит ${multigo.limit} ближайших объектов: данные для области могут быть неполными.`);
 
-  const merged = mergeStations(stations);
+  const merged = mergeStations(stationObservations.observe(stations));
   const yandex = viewport
     ? { stations: merged, eligible: merged.filter(isYandexVerificationCandidate).length, attempted: 0, checked: 0, warning: null, skipped: true }
     : await enrichYandexPrices(merged, { timeoutMs: config.yandex.summaryTimeoutMs });
-  const finalStations = mergeStations(yandex.stations);
+  const finalStations = mergeStations(stationObservations.observe(yandex.stations));
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
@@ -329,7 +331,7 @@ export async function streamProviderSnapshots(providerCalls, onSnapshot) {
     const settled = await Promise.race(pending.values());
     pending.delete(settled.index);
     completed += 1;
-    if (Array.isArray(settled.value?.stations)) stations.push(...settled.value.stations);
+    if (Array.isArray(settled.value?.stations)) stations.push(...stationObservations.observe(settled.value.stations));
     if (settled.error) errors.push(settled.source);
     await onSnapshot({
       stations: mergeStations(stations),
@@ -352,7 +354,7 @@ async function streamViewportStations(res, bbox) {
   const saved = readFreshCache(viewportStreamCache, key, config.resultCacheTtlMs);
   if (saved) {
     res.end(`${JSON.stringify({
-      stations: saved.stations,
+      stations: mergeStations(stationObservations.observe(saved.stations)),
       completed: 1,
       total: 1,
       complete: true,

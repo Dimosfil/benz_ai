@@ -103,6 +103,10 @@ implementation; project memory is the portable behavior record.
 - When only internal algorithms, business rules, data semantics, or architecture
   contracts change, update project memory; update user documentation only when
   the change affects user-visible functionality, operations, or stack facts.
+- Keep each layer bounded: update the smallest relevant spec instead of adding
+  a chronological work log or copying full docs into project memory. Link to
+  source, tests, detailed human documentation, and external evidence rather
+  than duplicating them. Revise or retire stale contracts when behavior changes.
 
 ## Retrieval And Startup
 

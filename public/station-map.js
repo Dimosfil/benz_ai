@@ -1,14 +1,17 @@
 import { addBasemapControl } from "./map-basemaps.js";
+import { bankPaymentPair, latestServiceReport, recentPaymentTimes } from "./station-evidence.js";
 import {
   formatPrice,
   hasRecentCrowdConfirmation,
-  hasRecentPaymentConfirmation,
   labels,
   selectionStatus,
   stationConfidence,
   stationFuelEntries,
   stationFreshText,
   stationPriceNote,
+  stationPaymentText,
+  stationPaymentPairText,
+  stationServiceText,
   stationQueueText,
   stationSources,
 } from "./station-view.js";
@@ -272,7 +275,7 @@ export function mergeStationCache(stationCache, identityIndex, stationKeys, stat
         ? { ...(previous.prices || {}), ...incomingPrices }
         : { ...incomingPrices, ...(previous.prices || {}) },
       links: { ...(previous.links || {}), ...(station.links || {}) },
-      availabilityBySource: { ...(previous.availabilityBySource || {}), ...(station.availabilityBySource || {}) },
+      availabilityBySource: mergeCachedEvidence(previous.availabilityBySource, station.availabilityBySource),
       nameAliases: [...new Set([...(previous.nameAliases || []), ...(station.nameAliases || [])])],
       addressAliases: [...new Set([...(previous.addressAliases || []), ...(station.addressAliases || [])])],
       priceUpdatedAt: incomingPricesAreNewer
@@ -309,11 +312,24 @@ function appendLink(container, href, label, className = "") {
   container.append(link);
 }
 
+function mergeCachedEvidence(left = {}, right = {}) {
+  return Object.fromEntries([...new Set([...Object.keys(left), ...Object.keys(right)])].map((source) => {
+    const previous = left[source] || {};
+    const incoming = right[source] || {};
+    const report = latestServiceReport({ previous, incoming });
+    return [source, { ...previous, ...incoming,
+      paymentTimes: recentPaymentTimes([...(previous.paymentTimes || []), ...(incoming.paymentTimes || [])]),
+      ...(report ? { serviceStatus: report.status, serviceObservedAt: report.observedAt, serviceReason: report.reason } : {}),
+    }];
+  }));
+}
+
 function popupFor(station, selectedFuels) {
   const status = stationMapStatus(station, selectedFuels);
-  const recentPayment = !selectedFuels.length && hasRecentPaymentConfirmation(station);
-  const recentCrowdConfirmation = hasRecentCrowdConfirmation(station, selectedFuels);
-  const confidence = recentPayment || recentCrowdConfirmation ? null : stationConfidence(station, selectedFuels);
+  const paused = latestServiceReport(station.availabilityBySource)?.status === "paused";
+  const paymentPair = !selectedFuels.length && bankPaymentPair(station.availabilityBySource);
+  const recentCrowdConfirmation = !paused && hasRecentCrowdConfirmation(station, selectedFuels);
+  const confidence = paymentPair || recentCrowdConfirmation ? null : stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
   popup.className = `map-popup map-popup-${status}`;
 
@@ -331,15 +347,18 @@ function popupFor(station, selectedFuels) {
   const statusTop = element("div", "map-popup-status-top");
   statusTop.append(
     text("span", STATUS_ICONS[status], "map-popup-status-icon"),
-    text("strong", STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
+    text("strong", paused ? "Обслуживание приостановлено" : STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
   );
   statusCard.append(statusTop);
-  if (recentPayment || recentCrowdConfirmation) {
+  if (paused) {
+    statusCard.append(text("p", stationServiceText(station), "map-popup-status-note"));
+    statusCard.append(text("p", "Топливо может быть в наличии, но заправиться сейчас может быть невозможно. Оплаты до остановки не подтверждают возобновление обслуживания.", "map-popup-status-note"));
+  } else if (paymentPair) {
+    statusCard.append(text("p", stationPaymentPairText(station), "map-popup-status-note"));
+  } else if (recentCrowdConfirmation) {
     statusCard.append(text(
       "p",
-      recentPayment
-        ? "Свежая банковская оплата подтверждает наличие хотя бы одного вида топлива. Статусы конкретных марок смотрите ниже."
-        : "Свежие подтверждения пользователей Яндекс Карт показывают наличие топлива. Статусы конкретных марок смотрите ниже.",
+      "Свежие подтверждения пользователей Яндекс Карт показывают вероятное наличие топлива. Статусы конкретных марок смотрите ниже.",
       "map-popup-status-note",
     ));
   } else if (confidence && confidence.total >= 2) {
@@ -363,7 +382,7 @@ function popupFor(station, selectedFuels) {
     statusCard.append(text(
       "p",
       status === "maybe_available"
-        ? "Есть только один актуальный сигнал о наличии. Для зелёного статуса нужны два независимых подтверждения или свежая банковская оплата."
+        ? "Есть только один сигнал о возможном наличии. Для зелёного статуса нужны согласованные подтверждения."
         : "Статус основан на единственном актуальном сигнале источника.",
       "map-popup-status-note",
     ));
@@ -372,6 +391,8 @@ function popupFor(station, selectedFuels) {
       ? "Источники не передали актуальные данные о наличии."
       : "Статус рассчитан по доступным сигналам агрегатора.", "map-popup-status-note"));
   }
+  statusCard.append(text("p", stationPaymentText(station), "map-popup-detail"));
+  statusCard.append(text("p", "Во время слива топлива обслуживание может быть приостановлено даже при наличии топлива и недавней оплате.", "map-popup-status-note"));
   const queueText = stationQueueText(station);
   if (queueText) statusCard.append(text("p", queueText, "map-popup-detail"));
   if (station.detail) statusCard.append(text("p", station.detail, "map-popup-detail"));
@@ -445,7 +466,7 @@ export function createStationMap({ container, message, count }) {
   if (!L?.map || !L?.markerClusterGroup) {
     message.hidden = false;
     message.textContent = "Карта не загрузилась. Список АЗС доступен ниже.";
-    return { showStations() {}, setFilters() {}, locateUser() {}, clear() {}, activate() {}, deactivate() {} };
+    return { showStations() {}, setFilters() {}, refreshEvidence() {}, locateUser() {}, clear() {}, activate() {}, deactivate() {} };
   }
 
   const map = L.map(container, { zoomControl: true, preferCanvas: true, maxZoom: 19 });
@@ -571,6 +592,7 @@ export function createStationMap({ container, message, count }) {
 
   function renderMarkers() {
     const loading = arguments[0]?.loading === true;
+    const refreshEvidence = arguments[0]?.refreshEvidence === true;
     const filtered = filterStations(viewportStations, filters);
     const valid = filtered.filter(hasMapCoordinates);
     const nextKeys = new Set();
@@ -583,7 +605,7 @@ export function createStationMap({ container, message, count }) {
       const status = stationMapStatus(station, filters.fuels);
       const existing = markerCache.get(key);
       if (existing) {
-        if (existing.isPopupOpen() && !station.priceLookupMessage) {
+        if (!refreshEvidence && existing.isPopupOpen() && !station.priceLookupMessage) {
           void loadPopupPrices(key, existing);
         }
         existing.options.title = station.name || "АЗС";
@@ -594,6 +616,13 @@ export function createStationMap({ container, message, count }) {
           existing.options.stationStatus = status;
           existing.setIcon(markerIcon(L, status));
           statusChanged.push(existing);
+        }
+        if (refreshEvidence && existing.isPopupOpen()) {
+          const content = existing.getPopup?.()?.getElement?.()?.querySelector?.(".map-popup");
+          const scrollTop = content?.scrollTop || 0;
+          const popup = popupFor(stationCache.get(key) || station, filters.fuels);
+          existing.setPopupContent(popup);
+          popup.scrollTop = scrollTop;
         }
         continue;
       }
@@ -882,5 +911,5 @@ export function createStationMap({ container, message, count }) {
     scheduleViewportLoad({ immediate: true });
   }
 
-  return { showStations, focusStations, setFilters, locateUser, clear, activate, deactivate };
+  return { showStations, focusStations, setFilters, refreshEvidence: () => renderMarkers({ refreshEvidence: true }), locateUser, clear, activate, deactivate };
 }

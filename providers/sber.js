@@ -1,4 +1,5 @@
 import { inBbox, normalizeFuelName } from "../domain/stations.js";
+import { recentPaymentTimes } from "../public/station-evidence.js";
 
 function normalizeStatus(value) {
   return ({ available: "available", stale: "maybe_available", unknown: "no_data" })[value] || "no_data";
@@ -28,6 +29,7 @@ export function normalizeSberStation(station) {
         overallStatus,
         fuelStatus,
         observedAt: lastTransactionAt,
+        paymentTimes: recentPaymentTimes([lastTransactionAt]),
         operationsCount: Number.isFinite(operationsCount) ? operationsCount : null,
         crowdState: station.crowdState || null,
       },

@@ -1,3 +1,5 @@
+import { bankPaymentPair, hasOnlyBankStatuses, latestServiceReport } from "./station-evidence.js";
+
 export const labels = Object.freeze({
   available: "Вероятно есть",
   maybe_available: "Возможно есть",
@@ -16,11 +18,11 @@ export const sourceNames = Object.freeze({
 });
 
 const fuelNames = Object.freeze({ DT: "ДТ", LPG: "Пропан", CNG: "Метан", OTHER: "Другое" });
-const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
+const formatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Moscow" });
+const paymentTimeFormatter = new Intl.DateTimeFormat("ru-RU", { timeStyle: "medium", timeZone: "Europe/Moscow" });
 const RELIABLE_AVAILABILITY_MIN_SIGNALS = 2;
 const RELIABLE_AVAILABILITY_MIN_AGREEMENT = 80;
 const FRESH_PAYMENT_MAX_AGE_MS = 60 * 60_000;
-const RECENT_PAYMENT_CONFIRMATION_MS = 30 * 60_000;
 const RECENT_CROWD_CONFIRMATION_MS = 60 * 60_000;
 const PAYMENT_SOURCES = new Set(["tbank", "alfa", "sber"]);
 
@@ -71,9 +73,13 @@ function confidenceFromStatuses(statuses) {
 }
 
 export function selectionStatus(station, selected = []) {
-  if ((!selected.length && hasRecentPaymentConfirmation(station)) || hasRecentCrowdConfirmation(station, selected)) return "available";
+  const paused = latestServiceReport(station.availabilityBySource)?.status === "paused";
+  if (!paused && ((!selected.length && bankPaymentPair(station.availabilityBySource))
+    || hasRecentCrowdConfirmation(station, selected))) return "available";
   const status = rawSelectionStatus(station, selected);
   if (status !== "available") return status;
+  if (paused) return "maybe_available";
+  if (!selected.length && hasOnlyBankStatuses(station.availabilityBySource)) return "maybe_available";
   const statuses = sourceStatuses(station, selected);
   const confidence = confidenceFromStatuses(statuses);
   const reliable = confidence
@@ -81,6 +87,22 @@ export function selectionStatus(station, selected = []) {
     && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT
     && statuses.every((value) => value === "available");
   return reliable ? "available" : "maybe_available";
+}
+
+export function stationServiceText(station) {
+  const report = latestServiceReport(station.availabilityBySource);
+  if (!report) return "";
+  const age = formatAge(Math.max(0, Date.now() - Date.parse(report.observedAt)));
+  const reason = report.status === "paused" ? report.reason || "Обслуживание приостановлено" : "Обслуживание возобновлено";
+  return `${reason} · ${sourceNames[report.source] || report.source} · ${age} назад`;
+}
+
+export function stationPaymentPairText(station) {
+  const pair = bankPaymentPair(station.availabilityBySource);
+  if (!pair) return "";
+  const times = [...pair.times].reverse().map((time) => paymentTimeFormatter.format(new Date(time)));
+  const banks = pair.sources.map((source) => sourceNames[source]).join(" и ");
+  return `Две разные операции по данным ${banks} за последние 30 минут: ${times.join(" и ")} МСК. Это повышает вероятность наличия топлива, но не гарантирует работу колонок сейчас.`;
 }
 
 export function hasRecentCrowdConfirmation(station, selected = [], now = Date.now()) {
@@ -94,16 +116,6 @@ export function hasRecentCrowdConfirmation(station, selected = [], now = Date.no
     return Number.isFinite(observedAt)
       && observedAt <= now + 5 * 60_000
       && now - observedAt <= RECENT_CROWD_CONFIRMATION_MS;
-  });
-}
-
-export function hasRecentPaymentConfirmation(station, now = Date.now()) {
-  return Object.entries(station.availabilityBySource || {}).some(([source, signal]) => {
-    if (!PAYMENT_SOURCES.has(source) || signal.overallStatus !== "available") return false;
-    const observedAt = Date.parse(signal.observedAt);
-    return Number.isFinite(observedAt)
-      && observedAt <= now + 5 * 60_000
-      && now - observedAt <= RECENT_PAYMENT_CONFIRMATION_MS;
   });
 }
 
@@ -167,37 +179,50 @@ export function stationConfidence(station, selected = []) {
 }
 
 export function stationLastPaymentAt(station) {
-  const timestamps = Object.entries(station.availabilityBySource || {})
-    .filter(([source]) => PAYMENT_SOURCES.has(source))
-    .map(([, signal]) => signal.observedAt)
-    .filter((value) => Number.isFinite(Date.parse(value)) && Date.parse(value) <= Date.now() + 5 * 60_000);
-  return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
+  const latest = latestBankOperation(station);
+  return latest ? new Date(Date.parse(latest[1].observedAt)).toISOString() : null;
+}
+
+function latestBankOperation(station) {
+  return Object.entries(station.availabilityBySource || {})
+    .filter(([source, signal]) => PAYMENT_SOURCES.has(source)
+      && Number.isFinite(Date.parse(signal.observedAt))
+      && Date.parse(signal.observedAt) <= Date.now() + 5 * 60_000)
+    .sort((left, right) => Date.parse(right[1].observedAt) - Date.parse(left[1].observedAt))[0] || null;
+}
+
+export function stationPaymentText(station) {
+  const latest = latestBankOperation(station);
+  if (!latest) return "Данных о последней оплате нет";
+  const [source, signal] = latest;
+  const ageMs = Math.max(0, Date.now() - Date.parse(signal.observedAt));
+  const stale = ageMs > FRESH_PAYMENT_MAX_AGE_MS;
+  return `${stale ? "⚠ " : ""}Последняя операция по данным ${sourceNames[source]}: ${formatter.format(new Date(signal.observedAt))} МСК · ${formatAge(ageMs)} назад${stale ? " · данные устарели" : ""}. Работа колонок сейчас не подтверждена.`;
 }
 
 export function stationFreshText(station) {
-  const lastPaymentAt = stationLastPaymentAt(station);
-  const ageMs = lastPaymentAt ? Math.max(0, Date.now() - Date.parse(lastPaymentAt)) : null;
-  const payment = lastPaymentAt
-    ? ageMs > FRESH_PAYMENT_MAX_AGE_MS
-      ? `⚠ Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждение устарело (${formatAge(ageMs)} назад)`
-      : `Последняя оплата: ${formatter.format(new Date(lastPaymentAt))} · подтверждено ${formatAge(ageMs)} назад`
-    : "Данных о последней оплате нет";
+  const payment = stationPaymentText(station);
   const queue = stationQueueText(station);
   const priceTime = Date.parse(station.priceUpdatedAt);
   const priceDate = Number.isFinite(priceTime) ? formatter.format(new Date(priceTime)) : station.priceUpdatedAt;
   const freshness = priceDate ? `${payment} · цены: ${priceDate}` : payment;
-  return queue ? `${queue} · ${freshness}` : freshness;
+  return [stationServiceText(station), queue, freshness].filter(Boolean).join(" · ");
 }
 
 export function stationQueueText(station) {
-  const signals = Object.values(station.availabilityBySource || {})
-    .filter((signal) => signal.queueLabel && Number.isFinite(Date.parse(signal.observedAt)))
-    .sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt));
+  const now = Date.now();
+  const signals = Object.entries(station.availabilityBySource || {}).filter(([, signal]) => signal.queueLabel);
   if (!signals.length) return "";
-  const signal = signals[0];
-  return signal.confirmations
-    ? `${signal.queueLabel} · ${signal.confirmations} подтверждения`
-    : signal.queueLabel;
+  const dated = signals.filter(([, signal]) => Number.isFinite(Date.parse(signal.observedAt))
+    && Date.parse(signal.observedAt) <= now + 5 * 60_000)
+    .sort((left, right) => Date.parse(right[1].observedAt) - Date.parse(left[1].observedAt));
+  if (!dated.length) return "Очередь: время сообщения неизвестно, текущая оценка недоступна";
+  const [source, signal] = dated[0];
+  const ageMs = Math.max(0, now - Date.parse(signal.observedAt));
+  const origin = `${sourceNames[source] || source} · ${formatAge(ageMs)} назад`;
+  if (ageMs > RECENT_CROWD_CONFIRMATION_MS) return `Очередь: данные устарели (${origin}), текущая оценка неизвестна`;
+  const confirmations = signal.confirmations ? ` · ${signal.confirmations} подтверждения` : "";
+  return `${signal.queueLabel} · ${origin}${confirmations}. Ожидание сейчас может отличаться.`;
 }
 
 function formatAge(ageMs) {

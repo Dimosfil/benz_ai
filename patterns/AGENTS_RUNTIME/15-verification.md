@@ -20,6 +20,19 @@ git diff --check
 For larger changes, reread the edited files and confirm links, paths, and
 checklists still match the repository layout.
 
+For a meaningful feature, workflow, business-rule, data-model, integration, or
+architecture change, compare the scoped diff with the relevant durable
+contracts before calling the task complete. Check each changed behavior,
+state transition, failure path, invariant, and architecture decision against
+the current source and tests. Update the affected focused project-memory spec
+in the same scope, or record why an existing spec already covers it. Check
+affected user-facing documentation separately, and verify links and current
+implementation maps. A report, handoff summary, ticket, or commit message does
+not satisfy this contract check. Do not expand the check into a whole-project
+audit when the change is narrow.
+When a spec is added, renamed, moved, or retired, check the project-memory
+README or canonical spec index and its relative links in the same batch.
+
 After API, admin-tool, or service writes that include Russian or other
 non-ASCII text, read the saved value back through the API or product UI and
 check the stored data, not only terminal display. Treat literal `????`,

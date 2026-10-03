@@ -1,24 +1,20 @@
 # Agent Instructions
 
-This is the lightweight runtime entrypoint for this project. Shared rules live
-in focused modules under `patterns/AGENTS_RUNTIME/`; load only what the task
-needs and prefer more specific project-local instructions, contracts, memory,
-and runbooks over shared defaults.
+Load only relevant `patterns/AGENTS_RUNTIME/` modules. Prefer project-local
+instructions, contracts, memory, and runbooks over shared defaults.
 
 ## Project
 
-Benz AI is a small Node.js web aggregator for gasoline availability. A user
-searches for a Russian city or region and sees a regional summary and station
-data. `server.js` is the server entrypoint; `public/` holds the UI. Fetch
-stations server-side, surface source limits, and keep local startup simple.
+Benz AI aggregates probable fuel availability for Russian territories.
+`server.js` serves station data; `public/` holds the UI. Fetch server-side,
+surface source limits, and keep local startup simple.
 
 ## Goal And Loading Contract
 
 - Derive a bounded goal and observable success criteria from the request and
   project context. Ask only when missing information materially changes scope;
   continue independent authorized work while waiting.
-- This file alone is sufficient only for greetings and status-neutral replies.
-  Before concrete work, select the matching runtime modules.
+- For concrete work, load the matching runtime modules.
 - For a GI command, run
   `tools/get-gi-context.ps1 -CommandText "<exact user command>"`. It performs the
   staged update check, longest-prefix route resolution, and bounded retrieval.
@@ -31,14 +27,12 @@ stations server-side, surface source limits, and keep local startup simple.
   enabled; absent `auto_apply_pending_migrations` defaults to `true`. Skip only
   for explicit `false` or a concrete blocker, and report the pending count.
   Never inspect `updates/` during this startup check.
-- Treat “do/follow strictly by GI” and equivalents as strict compliance with all
-  loaded rules. Report a blocked operation precisely and continue independent
-  authorized work.
+- Follow all loaded rules for explicit strict-GI requests; report blockers
+  precisely and continue independent authorized work.
 - Before adding a clarification or approval gate, apply
   `patterns/AGENTS_RUNTIME/03-rule-precedence.md` and existing authorization.
-- State-changing GI commands must not run from memory. If the context builder,
-  route manifest, resolver, or a mandatory routed file is missing, stop that
-  operation and name the missing path.
+- Never run state-changing GI commands from memory. Stop and name any missing
+  context builder, route manifest, resolver, or mandatory routed file.
 
 ## Core Safety And Boundaries
 
@@ -49,11 +43,19 @@ stations server-side, surface source limits, and keep local startup simple.
   audio, datasets, archives, or similar large content payloads. Use approved
   artifact storage and commit compact manifests, checksums, sources, or
   retrieval instructions unless the exact exception is explicitly approved.
+- Keep rebuildable build output in dedicated ignored directories and out of
+  source Git; version build inputs. Follow
+  `patterns/AGENTS_RUNTIME/09-build-and-install.md` for authorized cleanup,
+  verification, and explicitly approved project exceptions.
 - `tools/` is for durable reusable development and agent tooling. Product code,
   tests, docs, outputs, screenshots, exports, downloaded data, build bundles,
   and one-off probes belong in documented project locations.
   `tools/project-memory/` holds compact implementation-driving knowledge and
   evidence references, not bulk artifacts or a replacement for source/tests.
+- During meaningful behavior or architecture work, keep scoped code, tests,
+  affected docs, and focused project-memory contracts aligned before the
+  implementation task is complete.
+- Modular systems: `patterns/MODULAR_SERVICE_ENGINEERING.md`.
 - Do not revert user changes without an explicit request. Ask before destructive
   operations, broad formatting churn, dependency replacement, data migration,
   public contract changes, or unrelated expansion.
@@ -68,7 +70,8 @@ stations server-side, surface source limits, and keep local startup simple.
 - Startup/restore: `07-startup.md`; scope/evidence/cleanup: `07-scope-and-evidence.md`
 - Config: `08-config-service.md`; task manager: `08-task-manager.md`; sprints: `08-sprint.md`
 - Publication: `09-production.md`; deploy: `09-deploy-gateway.md`; FTP: `09-ftp.md`
-- Runtime/restart/defaults: `09-runtime-and-defaults.md`; tests: `09-testing.md`
+- Runtime/defaults: `09-runtime-and-defaults.md`; tester: `09-testing.md`
+- Full tests: `09-full-testing.md`
 - Build/install: `09-build-and-install.md`; memory operations: `09-project-memory-operations.md`
 - Private/missing context: `10-private-scope-and-missing-context.md`
 - Language: `11-language-preferences.md`; UI: `12-ui-and-focus.md`; progress: `13-progress-updates.md`

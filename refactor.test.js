@@ -197,7 +197,7 @@ test("downgrades matching positive sources when their observations are older tha
   assert.equal(merged.fuelStatus["92"], "maybe_available");
 });
 
-test("uses a bank payment younger than 30 minutes as a strong station-level confirmation", () => {
+test("keeps a lone recent bank operation probabilistic at station level", () => {
   const observedAt = new Date(Date.now() - 29 * 60_000).toISOString();
   const bank = station("alfa", "fresh-payment", 55, 37, "АЗС");
   bank.availabilityBySource = {
@@ -210,7 +210,7 @@ test("uses a bank payment younger than 30 minutes as a strong station-level conf
 
   const [merged] = mergeStations([bank]);
 
-  assert.equal(merged.overallStatus, "available");
+  assert.equal(merged.overallStatus, "maybe_available");
   assert.equal(merged.fuelStatus["92"], "maybe_available");
   assert.equal(merged.fuelStatus["95"], "maybe_available");
   assert.equal(merged.fuelStatus["98"], "not_available");

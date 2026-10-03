@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { readFreshCache, writeBoundedCache } from "../domain/bounded-cache.js";
 import { normalizeFuelName } from "../domain/stations.js";
 import { parseYandexPriceDocument } from "./yandex-price-document.js";
+import { serviceReportFromText } from "../public/station-evidence.js";
 
 const cache = new Map();
 const priceRequests = new Map();
@@ -103,6 +104,7 @@ export function parseYandexFuelAvailability(rawHtml, now = Date.now()) {
     confirmations: Number.isFinite(confirmations) && confirmations > 0 ? confirmations : null,
     ...queueFromTitle(title),
     detail: title,
+    ...serviceReportFromText(title, observedAt),
   };
 }
 

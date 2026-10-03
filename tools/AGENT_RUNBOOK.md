@@ -16,6 +16,15 @@ npm start
 
 ## Test
 
+GI chat commands: `gi test` explains the tester; `gi test start` executes the
+selected local scenario; `gi full test` requests full-system verification.
+The commands below and README are the current testing entrypoint. A canonical
+scenario inventory, input policy, evidence paths and restoration contracts
+remain undefined. Use `templates/PROJECT_TESTING.template.md` as an optional
+authoring scaffold, preserving the actual commands. Scenarios needing content
+must define approved sources or synthetic preparation, destination fields,
+input acceptance and cleanup/retention.
+
 ```powershell
 npm test
 ```
