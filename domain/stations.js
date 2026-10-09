@@ -1,4 +1,5 @@
 import { bankPaymentPair, hasOnlyBankStatuses, latestServiceReport, recentPaymentTimes } from "../public/station-evidence.js";
+import { activeReportedFuels, mergeFuelReports, reportedFuelStatus, resolveFuelReportStatus } from "../public/fuel-reports.js";
 
 export function inBbox(station, bbox) {
   return Number.isFinite(station.lat) && Number.isFinite(station.lon)
@@ -274,7 +275,7 @@ function mergeEvidenceBySource(left = {}, right = {}) {
   return Object.fromEntries([...sources].map((source) => [source, mergeEvidence(left[source], right[source])]));
 }
 
-function recomputeAvailability(station) {
+export function recomputeAvailability(station) {
   const evidence = Object.values(station.availabilityBySource || {});
   const now = Date.now();
   const serviceReport = latestServiceReport(station.availabilityBySource, now);
@@ -302,6 +303,15 @@ function recomputeAvailability(station) {
   station.lastTransactionAt = observed.length
     ? new Date(Math.max(...observed.map(Date.parse))).toISOString()
     : station.lastTransactionAt;
+  delete station.baseAvailability;
+  if (station.fuelReports?.length) {
+    const baseAvailability = { overallStatus: station.overallStatus, fuelStatus: { ...station.fuelStatus } };
+    const reportStatus = resolveFuelReportStatus(station, [], (fuel) => baseAvailability.fuelStatus[fuel] || "no_data",
+      baseAvailability.overallStatus, now);
+    station.baseAvailability = baseAvailability;
+    for (const fuel of activeReportedFuels(station, now)) station.fuelStatus[fuel] = reportedFuelStatus(station, fuel, now);
+    if (reportStatus) station.overallStatus = reportStatus;
+  }
   return station;
 }
 
@@ -322,6 +332,7 @@ function mergeStationInto(match, station) {
       : { ...incomingPrices, ...(match.prices || {}) };
     match.links = { ...(match.links || {}), ...(station.links || {}) };
     match.availabilityBySource = mergeEvidenceBySource(match.availabilityBySource, station.availabilityBySource);
+    if (match.fuelReports || station.fuelReports) match.fuelReports = mergeFuelReports(match.fuelReports || [], station.fuelReports || []);
     match.yandexOrgId ||= station.yandexOrgId;
     if (hasIncomingPrices && (incomingIsNewer || !match.priceUpdatedAt)) match.priceUpdatedAt = station.priceUpdatedAt || match.priceUpdatedAt;
 }

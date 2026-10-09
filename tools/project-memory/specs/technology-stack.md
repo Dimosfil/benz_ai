@@ -12,6 +12,7 @@
 | Browser integration | Headless Chrome/Edge via Chrome DevTools Protocol | `providers/sber-browser.js` |
 | Telegram interface | Telegram Bot API long polling over built-in Fetch API | `services/telegram-gateway.js`, `services/telegram-bot.js` |
 | Test subscription payments | YooKassa REST API via built-in Fetch; private atomic JSON order storage with one process owner | `providers/yookassa.js`, `services/subscription-payments.js`, `services/payment-store.js` |
+| On-site petrol reports | Atomic UTF-8 JSON file owned by one server process; one-hour per-grade priority shared with the browser; dedicated Compose volume | `services/station-fuel-reports.js`, `public/fuel-reports.js`, `docs/station-fuel-reports.md` |
 | Analytics storage | PostgreSQL through `pg`; privacy-preserving event hashes and aggregate admin reporting | `services/analytics.js`, `tools/project-memory/specs/analytics.md` |
 | Package manager | npm | `package.json` |
 | Tests | Node.js test runner | `npm test` |

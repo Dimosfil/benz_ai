@@ -13,6 +13,7 @@ import { COLUMN_KEYS, moveColumnOrder, normalizeColumnOrder } from "./table-orde
 import { filterStations, normalizeSelectedFuels } from "./station-filter.js";
 import { fetchJson } from "./api-client.js";
 import { createStationMap } from "./station-map.js";
+import { isFreshFuelReport, mergeFuelReports } from "./fuel-reports.js";
 import { nonSourceWarnings, sourceOverviewRows } from "./source-overview.js";
 
 const locationInput = document.querySelector("#location");
@@ -58,8 +59,19 @@ const stationMap = createStationMap({
   container: document.querySelector("#station-map"),
   message: document.querySelector("#map-message"),
   count: document.querySelector("#map-count"),
+  onStationReport(station) {
+    const ids = new Set((station.sourceRefs || []).map((ref) => `${ref.source}:${ref.externalId}`));
+    recentReportedStations = recentReportedStations.filter((existing) => existing.fuelReports?.some((report) => isFreshFuelReport(report))
+      && !(existing.sourceRefs || []).some((ref) => ids.has(`${ref.source}:${ref.externalId}`)));
+    recentReportedStations.push(station);
+    allStations = allStations.map((existing) => (existing.sourceRefs || []).some((ref) => ids.has(`${ref.source}:${ref.externalId}`))
+      ? { ...existing, ...station, prices: { ...(existing.prices || {}), ...(station.prices || {}) } } : existing);
+    renderStations({ refreshEvidence: true });
+    refreshEvidenceAge();
+  },
 });
 let allStations = [];
+let recentReportedStations = [];
 let initialSummaryLoad = true;
 let currentPage = 1;
 let pageSize = Number(pageSizeSelect.value);
@@ -489,7 +501,13 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
     const summaryResult = await summaryRequest;
     if (summaryResult.error) throw summaryResult.error;
     const data = summaryResult.data;
-    allStations = data.stations;
+    recentReportedStations = recentReportedStations.filter((station) => station.fuelReports?.some((report) => isFreshFuelReport(report)));
+    allStations = data.stations.map((station) => {
+      const ids = new Set((station.sourceRefs || []).map((ref) => `${ref.source}:${ref.externalId}`));
+      const local = recentReportedStations.find((known) => (known.sourceRefs || []).some((ref) => ids.has(`${ref.source}:${ref.externalId}`)));
+      return local ? { ...station, fuelReports: mergeFuelReports(local.fuelReports, station.fuelReports || []),
+        baseAvailability: station.baseAvailability || { overallStatus: station.overallStatus, fuelStatus: station.fuelStatus || {} } } : station;
+    });
     renderSummary(data);
     renderStations();
     const matches = filteredStations();
@@ -505,6 +523,7 @@ async function loadSummary({ refresh = false, activateMap = false } = {}) {
       deferViewportLoad: mapPanel.hidden,
       preserveStations: progressiveMapStarted,
     });
+    refreshEvidenceAge();
     const messages = nonSourceWarnings(data.warnings, data.sources);
     if (data.cacheRefresh?.refreshed) messages.unshift(`Весь кэш обновлён за ${(data.cacheRefresh.durationMs / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с.`);
     notice.hidden = !messages.length;

@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { buildInfo } from "./build-info.js";
 import { readFreshCache, writeBoundedCache } from "./domain/bounded-cache.js";
-import { inGeoBoundary, mergeStations, summarizeStations } from "./domain/stations.js";
+import { inGeoBoundary, mergeStations, recomputeAvailability, summarizeStations } from "./domain/stations.js";
 import { StationObservations } from "./domain/station-observations.js";
+import { StationFuelReports } from "./services/station-fuel-reports.js";
 import { clearAlfaCache, fetchAlfa } from "./providers/alfa.js";
 import { clearBenzupCache, fetchBenzup, normalizeBenzupStation } from "./providers/benzup.js";
 import { clearGdebenzCache, fetchGdebenz } from "./providers/gdebenz.js";
@@ -34,6 +35,11 @@ const PUBLIC_DIR = join(process.cwd(), "public");
 const resultCache = new Map();
 const viewportStreamCache = new Map();
 const stationObservations = new StationObservations();
+const stationFuelReports = new StationFuelReports({ file: config.stationReports.dataFile });
+
+function mergeReportedStations(stations) {
+  return stationFuelReports.attach(mergeStations(stations)).map(recomputeAvailability);
+}
 const sberWorker = new SberBrowserWorker(config.sber);
 const requestBuckets = new Map();
 const securityHeaders = Object.freeze({
@@ -66,6 +72,29 @@ function bearerToken(req) {
 function json(res, status, body) {
   res.writeHead(status, { ...securityHeaders, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(body));
+}
+
+function readReportBody(req) {
+  return new Promise((resolveBody, reject) => {
+    let size = 0;
+    let failed = false;
+    const chunks = [];
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (failed) return;
+      if (size > 8192) {
+        failed = true;
+        chunks.length = 0;
+        reject(Object.assign(new Error("Сообщение слишком большое."), { statusCode: 413 }));
+      } else chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (failed) return;
+      try { resolveBody(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
+      catch { reject(Object.assign(new Error("Некорректный JSON сообщения."), { statusCode: 400 })); }
+    });
+    req.on("error", () => reject(Object.assign(new Error("Не удалось получить сообщение."), { statusCode: 400 })));
+  });
 }
 
 function asNumber(value, key) {
@@ -163,10 +192,11 @@ export function alfaProviderCall(bbox, fetchImpl = fetchAlfa, enabled = config.a
 }
 
 async function searchStations(bbox, { mode = "full" } = {}) {
+  await stationFuelReports.ready;
   const viewport = mode === "viewport";
   const key = `${mode}:${JSON.stringify(bbox)}`;
   const saved = readFreshCache(resultCache, key, config.resultCacheTtlMs);
-  if (saved) return { ...saved, stations: mergeStations(stationObservations.observe(saved.stations)), cached: true };
+  if (saved) return { ...saved, stations: mergeReportedStations(stationObservations.observe(saved.stations)), cached: true };
 
   const providerFactories = [
     ["T-Bank", (signal) => fetchTbank(bbox, { signal })],
@@ -216,11 +246,11 @@ async function searchStations(bbox, { mode = "full" } = {}) {
   else warnings.push(providerFailureMessage(multigoResult, "Multigo"));
   if (multigo?.truncated) warnings.push(`Multigo вернул лимит ${multigo.limit} ближайших объектов: данные для области могут быть неполными.`);
 
-  const merged = mergeStations(stationObservations.observe(stations));
+  const merged = mergeReportedStations(stationObservations.observe(stations));
   const yandex = viewport
     ? { stations: merged, eligible: merged.filter(isYandexVerificationCandidate).length, attempted: 0, checked: 0, warning: null, skipped: true }
     : await enrichYandexPrices(merged, { timeoutMs: config.yandex.summaryTimeoutMs });
-  const finalStations = mergeStations(stationObservations.observe(yandex.stations));
+  const finalStations = mergeReportedStations(stationObservations.observe(yandex.stations));
   if (config.yandex.enabled && yandex.warning) warnings.push(yandex.warning);
 
   const value = {
@@ -334,7 +364,7 @@ export async function streamProviderSnapshots(providerCalls, onSnapshot) {
     if (Array.isArray(settled.value?.stations)) stations.push(...stationObservations.observe(settled.value.stations));
     if (settled.error) errors.push(settled.source);
     await onSnapshot({
-      stations: mergeStations(stations),
+      stations: mergeReportedStations(stations),
       completed,
       total: providerCalls.length,
       complete: pending.size === 0,
@@ -344,6 +374,7 @@ export async function streamProviderSnapshots(providerCalls, onSnapshot) {
 }
 
 async function streamViewportStations(res, bbox) {
+  await stationFuelReports.ready;
   res.writeHead(200, {
     ...securityHeaders,
     "Content-Type": "application/x-ndjson; charset=utf-8",
@@ -354,7 +385,7 @@ async function streamViewportStations(res, bbox) {
   const saved = readFreshCache(viewportStreamCache, key, config.resultCacheTtlMs);
   if (saved) {
     res.end(`${JSON.stringify({
-      stations: mergeStations(stationObservations.observe(saved.stations)),
+      stations: mergeReportedStations(stationObservations.observe(saved.stations)),
       completed: 1,
       total: 1,
       complete: true,
@@ -430,7 +461,7 @@ async function summaryFor(query) {
   return { ...result, stations, location: publicLocation(location), summary: summarizeStations(stations) };
 }
 
-export function startServer(port = config.port, host = config.host) {
+export function startServer(port = config.port, host = config.host, { fuelReports = stationFuelReports } = {}) {
   const analytics = new AnalyticsService(config.analytics);
   void analytics.start();
   const botHandler = createBenzTelegramHandler({
@@ -458,6 +489,25 @@ export function startServer(port = config.port, host = config.host) {
     let requestUrl;
     try {
       requestUrl = new URL(req.url || "/", "http://localhost");
+      if (requestUrl.pathname === "/api/station-reports") {
+        if (req.method !== "POST") return json(res, 405, { error: "Используйте POST" });
+        if (String(req.headers["sec-fetch-site"] || "").toLowerCase() === "cross-site"
+          || (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)) {
+          return json(res, 403, { error: "Отправьте сообщение из карточки АЗС на этом сайте." });
+        }
+        if (!/^application\/json(?:\s*;|$)/i.test(req.headers["content-type"] || "")) {
+          return json(res, 415, { error: "Сообщение должно быть в формате JSON." });
+        }
+        if (!allowRequest(req, "report", config.requestRateLimit.refreshesPerWindow)) {
+          return json(res, 429, { error: "Слишком много сообщений. Повторите позже." });
+        }
+        try {
+          const station = await fuelReports.submit(await readReportBody(req));
+          return json(res, 201, { station: mergeStations([station])[0] });
+        } catch (error) {
+          return json(res, error.statusCode || 503, { error: error.statusCode ? error.message : "Сообщение временно не удалось сохранить." });
+        }
+      }
       if (requestUrl.pathname === "/api/location") {
         if (req.method !== "GET") return json(res, 405, { error: "Используйте GET" });
         if (!allowRequest(req, "read", config.requestRateLimit.readsPerWindow)) return json(res, 429, { error: "Слишком много запросов. Повторите позже" });

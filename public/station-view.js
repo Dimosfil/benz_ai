@@ -1,4 +1,5 @@
 import { bankPaymentPair, hasOnlyBankStatuses, latestServiceReport } from "./station-evidence.js";
+import { activeReportedFuels, isFreshFuelReport, resolveFuelReportStatus } from "./fuel-reports.js";
 
 export const labels = Object.freeze({
   available: "Вероятно есть",
@@ -72,7 +73,7 @@ function confidenceFromStatuses(statuses) {
   };
 }
 
-export function selectionStatus(station, selected = []) {
+function baseSelectionStatus(station, selected = []) {
   const paused = latestServiceReport(station.availabilityBySource)?.status === "paused";
   if (!paused && ((!selected.length && bankPaymentPair(station.availabilityBySource))
     || hasRecentCrowdConfirmation(station, selected))) return "available";
@@ -87,6 +88,21 @@ export function selectionStatus(station, selected = []) {
     && confidence.percent >= RELIABLE_AVAILABILITY_MIN_AGREEMENT
     && statuses.every((value) => value === "available");
   return reliable ? "available" : "maybe_available";
+}
+
+export function selectionStatus(station, selected = []) {
+  const base = station.baseAvailability ? { ...station, ...station.baseAvailability } : station;
+  return resolveFuelReportStatus(station, selected, (fuel) => baseSelectionStatus(base, [fuel]),
+    baseSelectionStatus(base), Date.now()) || baseSelectionStatus(base, selected);
+}
+
+export function stationFuelReportText(station) {
+  const active = activeReportedFuels(station);
+  return (station.fuelReports || []).filter((report) => isFreshFuelReport(report))
+    .map((report) => {
+      const fuels = report.fuels.filter((fuel) => active.includes(fuel));
+      return fuels.length ? `Сообщение посетителя: ${fuels.map(fuelName).join(" / ")} нет · ${formatter.format(new Date(report.observedAt))} МСК. Действует один час; дизель оценивается отдельно.` : "";
+    }).filter(Boolean).join(" ");
 }
 
 export function stationServiceText(station) {
@@ -174,6 +190,7 @@ export function formatPrice(value, currency = "RUB") {
 }
 
 export function stationConfidence(station, selected = []) {
+  if (activeReportedFuels(station).some((fuel) => !selected.length || selected.includes(fuel))) return null;
   if (rawSelectionStatus(station, selected) === "no_data") return null;
   return confidenceFromStatuses(sourceStatuses(station, selected));
 }
@@ -206,7 +223,7 @@ export function stationFreshText(station) {
   const priceTime = Date.parse(station.priceUpdatedAt);
   const priceDate = Number.isFinite(priceTime) ? formatter.format(new Date(priceTime)) : station.priceUpdatedAt;
   const freshness = priceDate ? `${payment} · цены: ${priceDate}` : payment;
-  return [stationServiceText(station), queue, freshness].filter(Boolean).join(" · ");
+  return [stationFuelReportText(station), stationServiceText(station), queue, freshness].filter(Boolean).join(" · ");
 }
 
 export function stationQueueText(station) {

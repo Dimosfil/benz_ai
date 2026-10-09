@@ -1,4 +1,6 @@
 import { addBasemapControl } from "./map-basemaps.js";
+import { createFuelReportForm } from "./station-report-form.js";
+import { activeReportedFuels, mergeFuelReports } from "./fuel-reports.js";
 import { bankPaymentPair, latestServiceReport, recentPaymentTimes } from "./station-evidence.js";
 import {
   formatPrice,
@@ -13,6 +15,7 @@ import {
   stationPaymentPairText,
   stationServiceText,
   stationQueueText,
+  stationFuelReportText,
   stationSources,
 } from "./station-view.js";
 import { filterStations } from "./station-filter.js";
@@ -276,6 +279,10 @@ export function mergeStationCache(stationCache, identityIndex, stationKeys, stat
         : { ...incomingPrices, ...(previous.prices || {}) },
       links: { ...(previous.links || {}), ...(station.links || {}) },
       availabilityBySource: mergeCachedEvidence(previous.availabilityBySource, station.availabilityBySource),
+      ...((previous.fuelReports || station.fuelReports) ? {
+        fuelReports: mergeFuelReports(previous.fuelReports || [], station.fuelReports || []),
+        baseAvailability: station.baseAvailability || { overallStatus: station.overallStatus, fuelStatus: station.fuelStatus || {} },
+      } : {}),
       nameAliases: [...new Set([...(previous.nameAliases || []), ...(station.nameAliases || [])])],
       addressAliases: [...new Set([...(previous.addressAliases || []), ...(station.addressAliases || [])])],
       priceUpdatedAt: incomingPricesAreNewer
@@ -324,11 +331,12 @@ function mergeCachedEvidence(left = {}, right = {}) {
   }));
 }
 
-function popupFor(station, selectedFuels) {
+function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm = null) {
   const status = stationMapStatus(station, selectedFuels);
   const paused = latestServiceReport(station.availabilityBySource)?.status === "paused";
-  const paymentPair = !selectedFuels.length && bankPaymentPair(station.availabilityBySource);
-  const recentCrowdConfirmation = !paused && hasRecentCrowdConfirmation(station, selectedFuels);
+  const hasReport = activeReportedFuels(station).some((fuel) => !selectedFuels.length || selectedFuels.includes(fuel));
+  const paymentPair = !hasReport && !selectedFuels.length && bankPaymentPair(station.availabilityBySource);
+  const recentCrowdConfirmation = !hasReport && !paused && hasRecentCrowdConfirmation(station, selectedFuels);
   const confidence = paymentPair || recentCrowdConfirmation ? null : stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
   popup.className = `map-popup map-popup-${status}`;
@@ -347,9 +355,13 @@ function popupFor(station, selectedFuels) {
   const statusTop = element("div", "map-popup-status-top");
   statusTop.append(
     text("span", STATUS_ICONS[status], "map-popup-status-icon"),
-    text("strong", paused ? "Обслуживание приостановлено" : STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
+    text("strong", paused ? "Обслуживание приостановлено" : hasReport && !selectedFuels.length && status === "maybe_available"
+      ? "Есть сообщение об отсутствии бензина" : STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
   );
   statusCard.append(statusTop);
+  if (hasReport) {
+    statusCard.append(text("p", stationFuelReportText(station), "map-popup-status-note"));
+  }
   if (paused) {
     statusCard.append(text("p", stationServiceText(station), "map-popup-status-note"));
     statusCard.append(text("p", "Топливо может быть в наличии, но заправиться сейчас может быть невозможно. Оплаты до остановки не подтверждают возобновление обслуживания.", "map-popup-status-note"));
@@ -361,6 +373,8 @@ function popupFor(station, selectedFuels) {
       "Свежие подтверждения пользователей Яндекс Карт показывают вероятное наличие топлива. Статусы конкретных марок смотрите ниже.",
       "map-popup-status-note",
     ));
+  } else if (hasReport) {
+    statusCard.append(text("p", "Свежий отчёт имеет приоритет над старыми сигналами и банковскими оплатами по отмеченным маркам.", "map-popup-status-note"));
   } else if (confidence && confidence.total >= 2) {
     const confidenceRow = element("div", "map-popup-confidence");
     const confidenceCopy = element("div", "map-popup-confidence-copy");
@@ -429,6 +443,7 @@ function popupFor(station, selectedFuels) {
     text("p", stationSources(station), "map-popup-sources"),
   );
   popup.append(meta);
+  popup.append(reportForm || createFuelReportForm(station, onReportSaved));
 
   const links = document.createElement("div");
   links.className = "map-popup-links";
@@ -461,7 +476,7 @@ function clusterIcon(L, cluster) {
   });
 }
 
-export function createStationMap({ container, message, count }) {
+export function createStationMap({ container, message, count, onStationReport = () => {} }) {
   const L = window.L;
   if (!L?.map || !L?.markerClusterGroup) {
     message.hidden = false;
@@ -486,6 +501,7 @@ export function createStationMap({ container, message, count }) {
   const stationKeys = new WeakMap();
   const markerCache = new Map();
   const priceRequests = new Map();
+  const reportForms = new Map();
   let loadedBounds = null;
   let filters = { fuels: [], statuses: [], text: "" };
   let loadTimer = null;
@@ -497,6 +513,19 @@ export function createStationMap({ container, message, count }) {
   let activePopupStationKey = null;
   let failedSources = [];
   let lowZoomMode = false;
+
+  function onReportSaved(station) {
+    if (!stationSourceIdentityKeys(station).some((identity) => stationIdentityIndex.has(identity))) return;
+    mergeStations([station]);
+    onStationReport(station);
+    renderMarkers({ refreshEvidence: true });
+  }
+
+  function stationPopup(station) {
+    const key = stationKeys.get(station) || stationCacheKey(station);
+    if (!reportForms.has(key)) reportForms.set(key, createFuelReportForm(station, onReportSaved));
+    return popupFor(station, filters.fuels, onReportSaved, reportForms.get(key));
+  }
 
   function showMessage(value) {
     message.textContent = value || "";
@@ -535,6 +564,7 @@ export function createStationMap({ container, message, count }) {
     for (const [key, station] of stationCache) {
       if (stationWithinBounds(station, bounds)) continue;
       stationCache.delete(key);
+      reportForms.delete(key);
       for (const [identity, indexedKey] of stationIdentityIndex) {
         if (indexedKey === key) stationIdentityIndex.delete(identity);
       }
@@ -557,7 +587,7 @@ export function createStationMap({ container, message, count }) {
       stationCache.set(key, updated);
       stationKeys.set(updated, key);
       syncStationCache();
-      if (marker.isPopupOpen()) marker.setPopupContent(popupFor(stationCache.get(key), filters.fuels));
+      if (marker.isPopupOpen()) marker.setPopupContent(stationPopup(stationCache.get(key)));
     };
     priceRequests.set(key, true);
     update({ priceLookupMessage: id ? "Проверяем цены…" : "Ищем карточку АЗС и проверяем цены…" });
@@ -620,7 +650,7 @@ export function createStationMap({ container, message, count }) {
         if (refreshEvidence && existing.isPopupOpen()) {
           const content = existing.getPopup?.()?.getElement?.()?.querySelector?.(".map-popup");
           const scrollTop = content?.scrollTop || 0;
-          const popup = popupFor(stationCache.get(key) || station, filters.fuels);
+          const popup = stationPopup(stationCache.get(key) || station);
           existing.setPopupContent(popup);
           popup.scrollTop = scrollTop;
         }
@@ -634,7 +664,7 @@ export function createStationMap({ container, message, count }) {
         title: station.name || "АЗС",
         alt: `${station.name || "АЗС"}: ${labels[status] || labels.no_data}`,
       }).bindPopup(
-        () => popupFor(stationCache.get(key) || station, filters.fuels),
+        () => stationPopup(stationCache.get(key) || station),
         {
           autoPan: true,
           keepInView: true,
@@ -683,6 +713,7 @@ export function createStationMap({ container, message, count }) {
     requestSequence += 1;
     loadedBounds = null;
     stationCache.clear();
+    reportForms.clear();
     stationIdentityIndex.clear();
     viewportStations = [];
     markers.clearLayers();
@@ -816,6 +847,7 @@ export function createStationMap({ container, message, count }) {
     requestSequence += 1;
     loadedBounds = null;
     stationCache.clear();
+    reportForms.clear();
     stationIdentityIndex.clear();
     viewportStations = [];
     markers.clearLayers();
@@ -873,6 +905,7 @@ export function createStationMap({ container, message, count }) {
     if (!preserveStations) {
       loadedBounds = null;
       stationCache.clear();
+      reportForms.clear();
       stationIdentityIndex.clear();
     }
     mergeStations(stations);

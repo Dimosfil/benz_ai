@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createStationMap } from "./public/station-map.js";
+import { mergeStations } from "./domain/stations.js";
 
 function node() {
   return {
     children: [], style: {}, textContent: "",
     append(...children) { this.children.push(...children); },
+    handlers: {}, setAttribute() {}, addEventListener(event, fn) { this.handlers[event] = fn; },
     get childElementCount() { return this.children.length; },
   };
 }
@@ -46,7 +48,14 @@ for (const hasOrganizationId of [true, false]) test(`opening a popup fills price
   } };
   let resolveRequest;
   let calls = 0;
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, options) => {
+    if (url === "/api/station-reports") {
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body).fuels, ["92", "95"]);
+      assert.equal(JSON.parse(options.body).checkedOnSite, true);
+      return Response.json({ station: mergeStations([{ ...station, fuelReports: [{ status: "not_available",
+        fuels: ["92", "95"], observedAt: new Date(Date.now()).toISOString() }] }])[0] });
+    }
     const query = new URL(url, "http://localhost").searchParams;
     assert.equal(query.get("yandexOrgId"), hasOrganizationId || calls > 0 ? "38745431337" : null);
     assert.equal(query.get("lat"), "51.69258");
@@ -119,6 +128,19 @@ for (const hasOrganizationId of [true, false]) test(`opening a popup fills price
     assert.equal(marker.options.stationStatus, "maybe_available");
     assert.doesNotMatch(content(marker.popup), /Две разные операции/);
     assert.equal(calls, beforeAgeRefresh, "age refresh must not poll providers or prices");
+    const form = marker.popup.children.find((child) => child.className === "map-popup-report");
+    form.children[4].children[0].checked = true;
+    view.refreshEvidence();
+    assert.equal(marker.popup.children.find((child) => child.className === "map-popup-report"), form);
+    assert.equal(form.children[4].children[0].checked, true, "age refresh preserves the report draft");
+    await form.handlers.submit({ preventDefault() {} });
+    assert.equal(marker.options.stationStatus, "not_available");
+    assert.match(content(marker.popup), /Сообщение посетителя/);
+    assert.match(content(marker.popup), /АИ‑92.*АИ‑95.*нет/);
+    assert.match(content(marker.popup), /64,95/);
+    view.showStations([station], { preserveStations: true });
+    view.refreshEvidence();
+    assert.equal(marker.options.stationStatus, "not_available", "a concurrent older snapshot must not erase the submitted report");
     marker.open();
     view.clear();
     const updates = marker.updates;

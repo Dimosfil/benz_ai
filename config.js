@@ -23,6 +23,7 @@ const llmAllowUnauthenticated = disabledByDefault(process.env.LLM_ALLOW_UNAUTHEN
 
 export const config = Object.freeze({
   subscription: loadSubscriptionConfig(),
+  stationReports: { dataFile: process.env.STATION_REPORTS_DATA_FILE || "data/station-reports/reports.json" },
   host: process.env.HOST || "0.0.0.0",
   port: positiveInteger(process.env.PORT, 3000),
   resultCacheTtlMs: 2 * 60_000,

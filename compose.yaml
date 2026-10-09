@@ -80,8 +80,10 @@ services:
     read_only: true
     volumes:
       - payments:/app/data/payments
+      - station-reports:/app/data/station-reports
     security_opt:
       - no-new-privileges:true
 
 volumes:
   payments:
+  station-reports:

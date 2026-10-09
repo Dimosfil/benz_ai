@@ -17,7 +17,7 @@ ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
 ENV HOME=/tmp
 
 WORKDIR /app
-RUN mkdir -p /app/data/payments && chown -R node:node /app/data
+RUN mkdir -p /app/data/payments /app/data/station-reports && chown -R node:node /app/data
 
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
