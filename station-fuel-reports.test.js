@@ -24,17 +24,19 @@ function report(now, fuels = ["92", "95"]) {
   return { sourceRefs: station(now).sourceRefs, fuels, status: "not_available", observedAt: at(now, 1) };
 }
 
-test("on-site petrol report beats old availability and payments, preserves diesel and prices", () => {
+test("on-site petrol report beats old availability and payments and preserves petrol prices", () => {
   const now = Date.now();
   const original = station(now);
   const [value] = mergeStations([{ ...original, fuelReports: [report(now)] }]);
-  assert.equal(value.overallStatus, "maybe_available");
+  assert.equal(value.overallStatus, "not_available");
+  assert.equal(selectionStatus(value), "not_available");
   for (const fuel of ["92", "95"]) {
     assert.equal(value.fuelStatus[fuel], "not_available");
     assert.equal(selectionStatus(value, [fuel]), "not_available");
   }
   assert.equal(selectionStatus(value, ["92", "95"]), "not_available");
-  assert.equal(selectionStatus(value, ["DT"]), "available");
+  assert.equal(selectionStatus(value, ["DT"]), "no_data");
+  assert.equal(value.fuelStatus.DT, undefined);
   assert.equal(selectionStatus(value, ["92", "DT"]), "maybe_available");
   assert.equal(selectionStatus(value, ["92", "CNG"]), "maybe_available");
   assert.equal(stationConfidence(value), null);
@@ -172,7 +174,7 @@ test("HTTP report endpoint validates origin/body, saves a known station and enfo
   const data = await response.json();
   assert.equal(data.station.fuelStatus[92], "not_available");
   assert.equal(data.station.fuelStatus[95], "not_available");
-  assert.equal(data.station.fuelStatus.DT, "available");
+  assert.equal(data.station.fuelStatus.DT, undefined);
   assert.equal(data.station.name, "Тестовая АЗС");
   assert.equal((await fetch(url, options)).status, 429);
   assert.equal((await fetch(`${base}/api/health`)).status, 200);

@@ -15,6 +15,7 @@ import { fetchJson } from "./api-client.js";
 import { createStationMap } from "./station-map.js";
 import { isFreshFuelReport, mergeFuelReports } from "./fuel-reports.js";
 import { nonSourceWarnings, sourceOverviewRows } from "./source-overview.js";
+import { PETROL_FUELS } from "./station-evidence.js";
 
 const locationInput = document.querySelector("#location");
 const fuel = document.querySelector("#fuel");
@@ -132,7 +133,7 @@ function restoreUIState() {
   if (typeof saved.query === "string") query.value = saved.query;
   if (Array.isArray(saved.fuels)) {
     fuelInputs.forEach((input) => { input.checked = saved.fuels.includes(input.value); });
-    fuelAny.checked = saved.fuels.length === 0;
+    fuelAny.checked = !fuelInputs.some((input) => input.checked);
   }
   if (Array.isArray(saved.statuses)) {
     statusInputs.forEach((input) => { input.checked = saved.statuses.includes(input.value); });
@@ -216,7 +217,7 @@ function updateFuelPicker(changed) {
   }
   if (!fuelInputs.some((input) => input.checked)) fuelAny.checked = true;
   const selected = selectedFuels();
-  document.querySelector("#fuel-label").textContent = selected.length ? selected.map(fuelName).join(", ") : "Любое";
+  document.querySelector("#fuel-label").textContent = selected.length ? selected.map(fuelName).join(", ") : "Любой бензин";
 }
 
 function selectedStatuses() {
@@ -351,7 +352,8 @@ function renderSummary(data) {
   sourceErrors.replaceChildren(...errors);
   sourceAvailability.hidden = false;
   renderSourceOverview(data);
-  const fuelRows = Object.entries(summary.fuels).sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true })).map(([type, values]) => {
+  const fuelRows = Object.entries(summary.fuels).filter(([fuel]) => PETROL_FUELS.has(fuel))
+    .sort(([a], [b]) => a.localeCompare(b, "ru", { numeric: true })).map(([type, values]) => {
     const row = document.createElement("div");
     row.className = "fuel-row";
     const name = document.createElement("strong");

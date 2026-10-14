@@ -1,3 +1,5 @@
+import { PETROL_FUELS, evidenceFuels, petrolObservedAt, selectionSignalStatus } from "../public/station-evidence.js";
+
 export const TELEGRAM_BOT_PROFILE = {
   commands: [
     { command: "start", description: "Как пользоваться ботом" },
@@ -8,17 +10,17 @@ export const TELEGRAM_BOT_PROFILE = {
     { command: "subscription", description: "Проверить тестовую подписку" },
   ],
   description: [
-    "Benz AI ищет АЗС и вероятностные данные о наличии топлива.",
+    "Benz AI ищет АЗС и вероятностные данные о наличии бензина.",
     "Отправьте город, район или регион обычным сообщением.",
     "Примеры: Воронеж; Коминтерновский район, Воронеж; Новоусманский район, Воронежская область.",
     "Сайт: https://daimnebenz.bothost.tech/",
     "Подробная справка — /help.",
   ].join("\n"),
-  shortDescription: "Поиск АЗС и вероятностного наличия топлива по городу, району или региону России.",
+  shortDescription: "Поиск АЗС и вероятностного наличия бензина по городу, району или региону России.",
 };
 
 const HELP_TEXT = [
-  "⛽ Benz AI ищет АЗС и вероятностные данные о наличии топлива.",
+  "⛽ Benz AI ищет АЗС и вероятностные данные о наличии бензина.",
   "Просто отправьте название территории обычным сообщением.",
   [
     "Примеры запросов:",
@@ -85,6 +87,7 @@ export function formatTelegramSummary(result) {
   const summary = result.summary || {};
   const statuses = summary.statuses || {};
   const fuels = Object.entries(summary.fuels || {})
+    .filter(([fuel]) => PETROL_FUELS.has(fuel))
     .sort(([left], [right]) => left.localeCompare(right, "ru", { numeric: true }))
     .map(([fuel, values]) => `${fuel}: ${[
       `✅ ${values.available || 0} вероятно есть`,
@@ -103,12 +106,12 @@ export function formatTelegramSummary(result) {
   return [
     `📍 ${result.location?.name || result.location?.displayName || "Найденная территория"}`,
     `АЗС найдено: ${summary.total || 0}`,
-    `Вероятно есть топливо: ${statuses.available || 0}`,
+    `Вероятно есть бензин: ${statuses.available || 0}`,
     `Возможно есть: ${statuses.maybe_available || 0}`,
     `Вероятно нет: ${statuses.not_available || 0}`,
     `Нет данных: ${statuses.no_data || 0}`,
     `С ценами: ${summary.withPrices || 0}`,
-    fuels.length ? `\nПо видам топлива:\n${fuels.join("\n")}` : "",
+    fuels.length ? `\nПо маркам бензина:\n${fuels.join("\n")}` : "",
     stationRows.length ? `\nАЗС:\n\n${stationRows.join("\n\n")}` : "",
     remaining ? `\nЕщё ${remaining} АЗС доступны в веб-версии.` : "",
     warnings.length ? `\nОграничения источников:\n${warnings.join("\n")}` : "",
@@ -163,22 +166,25 @@ function statusRank(status) {
 
 function formatStation(station, number) {
   const fuelKeys = new Set([...Object.keys(station.fuelStatus || {}), ...Object.keys(station.prices || {})]);
-  const fuels = [...fuelKeys].map((fuel) => {
+  const fuels = [...fuelKeys].filter((fuel) => PETROL_FUELS.has(fuel)).map((fuel) => {
     const status = station.fuelStatus?.[fuel];
     return `${fuel}: ${statusText[status] || "⚪ нет данных"}`;
   });
   const priceLines = formatPrices(station);
   const sourceEvidence = formatSourceEvidence(station);
   const address = String(station.address || "Адрес не указан").replace(/^Россия,\s*/i, "");
-  const observedAt = formatObservedAt(station.lastTransactionAt);
-  const fuelStatuses = Object.values(station.fuelStatus || {});
+  const evidence = station.availabilityBySource || {};
+  const petrolTimes = Object.values(evidence).map(petrolObservedAt).map(Date.parse).filter(Number.isFinite);
+  const observedAt = formatObservedAt(petrolTimes.length ? new Date(Math.max(...petrolTimes)).toISOString()
+    : Object.keys(evidence).length ? null : station.lastTransactionAt);
+  const fuelStatuses = Object.entries(station.fuelStatus || {}).filter(([fuel]) => PETROL_FUELS.has(fuel)).map(([, status]) => status);
   const stationOnlyStatus = station.overallStatus !== "no_data"
     && fuelStatuses.length > 0
     && fuelStatuses.every((status) => status === "no_data");
   return [
     `${number}. ${statusText[station.overallStatus] || "⚪ нет данных"} — ${station.name || "АЗС"}`,
     `📍 ${address}`,
-    fuels.length ? fuels.map((fuel) => `⛽ ${fuel}`).join("\n") : "⛽ Данные по видам топлива отсутствуют",
+    fuels.length ? fuels.map((fuel) => `⛽ ${fuel}`).join("\n") : "⛽ Данные по маркам бензина отсутствуют",
     ...priceLines,
     stationOnlyStatus ? "ℹ️ Общий статус относится ко всей АЗС; по отдельным видам топлива данных нет." : "",
     observedAt ? `🕒 Данные: ${observedAt}` : "",
@@ -187,7 +193,7 @@ function formatStation(station, number) {
 }
 
 function formatPrices(station) {
-  const prices = Object.entries(station.prices || {}).filter(([, price]) => Number.isFinite(Number(price?.value)));
+  const prices = Object.entries(station.prices || {}).filter(([fuel, price]) => PETROL_FUELS.has(fuel) && Number.isFinite(Number(price?.value)));
   if (!prices.length) return [];
   const values = prices.map(([fuel, price]) => {
     const value = Number(price.value).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -216,8 +222,10 @@ function formatSourceEvidence(station) {
       return `${name} — без сигнала наличия`;
     }
 
+    const petrol = evidenceFuels({ [source]: signal });
+
     const details = [];
-    if (signal.detail) details.push(`«${signal.detail}»`);
+    if (signal.detail && (petrol.length || signal.overallStatus === "not_available")) details.push(`«${signal.detail}»`);
     if (signal.operationsCount != null && Number.isFinite(Number(signal.operationsCount))) {
       details.push(russianCount(signal.operationsCount, ["операция", "операции", "операций"]));
     }
@@ -227,7 +235,9 @@ function formatSourceEvidence(station) {
     if (Number.isFinite(Number(signal.confidence)) && Number(signal.confidence) > 0) {
       details.push(`уверенность ${Math.round(Number(signal.confidence) * 100)}%`);
     }
-    const label = statusText[signal.overallStatus]?.replace(/^[^\p{L}]+/u, "") || "нет данных";
+    const petrolStatus = petrol.length ? selectionSignalStatus(source, signal, petrol, true)
+      : signal.overallStatus === "not_available" ? "not_available" : "no_data";
+    const label = statusText[petrolStatus]?.replace(/^[^\p{L}]+/u, "") || "нет данных";
     return `${name} — ${label}${details.length ? ` (${details.join(", ")})` : ""}`;
   }).join("; ");
 }

@@ -401,7 +401,7 @@
         "gi пул",
         "ги пул"
       ],
-      "contract": "Perform only the requested Git finish or pull operation with compact status, scope, secret, and remote checks. For commit commands, use explicit selection, then active task scope, otherwise standalone repository scope including eligible current changes in a new chat; do not ask solely because chat history is absent. Do not start project-memory auditing, implementation, product testing, or runtime cleanup.",
+      "contract": "Perform only the requested Git finish or pull operation with compact status, scope, secret, and remote checks. Preserve the full requested command, including scope modifiers. For commit commands, explicit all-changes selection overrides active task scope; otherwise use explicit selection, then active task scope, then standalone repository scope including eligible current changes in a new chat. Push existing outgoing commits when no eligible selected changes need a new commit. Account for selected changes and report excluded paths; do not ask solely because chat history is absent. Do not start project-memory auditing, implementation, product testing, or runtime cleanup.",
       "context_files": [
         "patterns/AGENTS_RUNTIME/16-git-policy.md"
       ]

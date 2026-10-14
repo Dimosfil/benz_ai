@@ -1,7 +1,7 @@
 import { addBasemapControl } from "./map-basemaps.js";
 import { createFuelReportForm } from "./station-report-form.js";
 import { activeReportedFuels, mergeFuelReports } from "./fuel-reports.js";
-import { bankPaymentPair, latestServiceReport, recentPaymentTimes } from "./station-evidence.js";
+import { availabilityPaymentPair, latestServiceReport, mergeFuelPaymentTimes, recentPaymentTimes } from "./station-evidence.js";
 import {
   formatPrice,
   hasRecentCrowdConfirmation,
@@ -39,6 +39,12 @@ const STATUS_HEADLINES = Object.freeze({
   maybe_available: "Топливо, возможно, есть",
   not_available: "Топлива, вероятно, нет",
   no_data: "Данных о наличии нет",
+});
+const PETROL_STATUS_HEADLINES = Object.freeze({
+  available: "Бензин, вероятно, есть",
+  maybe_available: "Бензин, возможно, есть",
+  not_available: "Бензина, вероятно, нет",
+  no_data: "Данных о бензине нет",
 });
 const STATUS_ICONS = Object.freeze({ available: "✓", maybe_available: "?", not_available: "!", no_data: "·" });
 
@@ -326,6 +332,8 @@ function mergeCachedEvidence(left = {}, right = {}) {
     const report = latestServiceReport({ previous, incoming });
     return [source, { ...previous, ...incoming,
       paymentTimes: recentPaymentTimes([...(previous.paymentTimes || []), ...(incoming.paymentTimes || [])]),
+      ...(previous.paymentTimesByFuel || incoming.paymentTimesByFuel
+        ? { paymentTimesByFuel: mergeFuelPaymentTimes(previous.paymentTimesByFuel, incoming.paymentTimesByFuel) } : {}),
       ...(report ? { serviceStatus: report.status, serviceObservedAt: report.observedAt, serviceReason: report.reason } : {}),
     }];
   }));
@@ -335,8 +343,8 @@ function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm =
   const status = stationMapStatus(station, selectedFuels);
   const paused = latestServiceReport(station.availabilityBySource)?.status === "paused";
   const hasReport = activeReportedFuels(station).some((fuel) => !selectedFuels.length || selectedFuels.includes(fuel));
-  const paymentPair = !hasReport && !selectedFuels.length && bankPaymentPair(station.availabilityBySource);
-  const recentCrowdConfirmation = !hasReport && !paused && hasRecentCrowdConfirmation(station, selectedFuels);
+  const paymentPair = !hasReport && status === "available" && availabilityPaymentPair(station.availabilityBySource, selectedFuels);
+  const recentCrowdConfirmation = !hasReport && !paused && status === "available" && hasRecentCrowdConfirmation(station, selectedFuels);
   const confidence = paymentPair || recentCrowdConfirmation ? null : stationConfidence(station, selectedFuels);
   const popup = document.createElement("article");
   popup.className = `map-popup map-popup-${status}`;
@@ -356,7 +364,7 @@ function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm =
   statusTop.append(
     text("span", STATUS_ICONS[status], "map-popup-status-icon"),
     text("strong", paused ? "Обслуживание приостановлено" : hasReport && !selectedFuels.length && status === "maybe_available"
-      ? "Есть сообщение об отсутствии бензина" : STATUS_HEADLINES[status] || labels.no_data, "map-popup-status-title"),
+      ? "Есть сообщение об отсутствии бензина" : (selectedFuels.length ? STATUS_HEADLINES : PETROL_STATUS_HEADLINES)[status] || labels.no_data, "map-popup-status-title"),
   );
   statusCard.append(statusTop);
   if (hasReport) {
@@ -366,7 +374,7 @@ function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm =
     statusCard.append(text("p", stationServiceText(station), "map-popup-status-note"));
     statusCard.append(text("p", "Топливо может быть в наличии, но заправиться сейчас может быть невозможно. Оплаты до остановки не подтверждают возобновление обслуживания.", "map-popup-status-note"));
   } else if (paymentPair) {
-    statusCard.append(text("p", stationPaymentPairText(station), "map-popup-status-note"));
+    statusCard.append(text("p", stationPaymentPairText(station, selectedFuels), "map-popup-status-note"));
   } else if (recentCrowdConfirmation) {
     statusCard.append(text(
       "p",
@@ -396,7 +404,7 @@ function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm =
     statusCard.append(text(
       "p",
       status === "maybe_available"
-        ? "Есть только один сигнал о возможном наличии. Для зелёного статуса нужны согласованные подтверждения."
+        ? "Есть только один сигнал о возможном наличии. Для зелёного статуса нужны актуальные данные по выбранному топливу и две разные операции за последние 30 минут."
         : "Статус основан на единственном актуальном сигнале источника.",
       "map-popup-status-note",
     ));
@@ -406,10 +414,12 @@ function popupFor(station, selectedFuels, onReportSaved = () => {}, reportForm =
       : "Статус рассчитан по доступным сигналам агрегатора.", "map-popup-status-note"));
   }
   statusCard.append(text("p", stationPaymentText(station), "map-popup-detail"));
+  if (!paymentPair && status === "maybe_available") statusCard.append(text("p",
+    "Совпадение источников и цена не подтверждают отпуск бензина. Для зелёной оценки нужны актуальные данные по марке и две разные операции за последние 30 минут.", "map-popup-status-note"));
+  if (!selectedFuels.length) statusCard.append(text("p", "Оцениваются только марки бензина.", "map-popup-status-note"));
   statusCard.append(text("p", "Во время слива топлива обслуживание может быть приостановлено даже при наличии топлива и недавней оплате.", "map-popup-status-note"));
   const queueText = stationQueueText(station);
   if (queueText) statusCard.append(text("p", queueText, "map-popup-detail"));
-  if (station.detail) statusCard.append(text("p", station.detail, "map-popup-detail"));
   popup.append(statusCard);
 
   const fuels = stationFuelEntries(station, selectedFuels);

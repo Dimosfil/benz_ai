@@ -11,6 +11,11 @@ failure, unresolved concern, or mandatory project gate. Do not rerun unchanged
 checks merely to gain confidence. Report unavailable checks as specific
 verification gaps and continue independent authorized work.
 
+For behavior/architecture changes, check the pre-edit mechanism mapping, scenario
+result, invariants, and side effects under `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`.
+Reject undocumented bypasses and tests merely mirroring code. A restored final
+state does not prove intermediate effects safe; report live verification gaps.
+
 For documentation-only changes:
 
 ```powershell

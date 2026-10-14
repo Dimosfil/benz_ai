@@ -274,7 +274,8 @@ the listed commands.
 | `gi full test`, `gi release test`, `gi system test` | Run documented full-system verification. |
 | `gi git summary`, `gi гит-обзор` | Summarize the latest git commit without printing a full diff. |
 | `gi commit`, `gi коммит` | Commit scoped changes. |
-| `gi push`, `gi пуш` | Commit and push scoped changes. |
+| `gi push`, `gi пуш` | Commit selected changes when present, then push; without an active task, select all eligible repository changes. |
+| `gi push all`, `ги пуш всё`, `ги пуш все` | Select all eligible current repository changes, overriding the active-task default; commit and push. |
 | `gi only push`, `gi только пуш` | Push the current branch without creating a commit. |
 | `gi commit push`, `gi коммит пуш` | Commit and push scoped changes. |
 | `gi pull`, `gi пул` | Fetch and pull the current branch. |
@@ -1138,6 +1139,7 @@ Git-finish ниже. Если проект безусловно запрещае
 
 ```text
 gi пуш            # commit + push
+ги пуш всё         # все допустимые изменения репозитория + push
 gi коммит          # commit только
 gi только пуш      # push без commit
 gi коммит пуш      # commit + push (алиас gi пуш)
@@ -1156,10 +1158,20 @@ changes, remote и ветку. Scope определяется по порядк�
 и явно отложенная отдельная работа остаются вне коммита. Активную задачу нельзя
 расширять по сходству dirty-файлов. Уточнение требуется только при конкретном
 противоречии scope или невозможности отделить исключённые изменения.
-`gi только пуш` не выбирает файлы working tree. `gi пуш` нельзя подменять сырым `git push`, повтором
-предыдущего terminal push или push-only действием; если scoped изменений для
-commit нет, агент сообщает это вместо push-only fallback. Push без нового
-commit выполняется только по `gi только пуш`. Git-finish сам по себе не
+`gi push all`, `ги пуш всё`, `ги пуш все` и эквивалентные формы commit/commit-push
+явно выбирают все допустимые изменения текущего репозитория поверх default
+активной задачи: staged, unstaged, untracked, удаления и ранее сделанные изменения.
+Конкретные запреты на включение отдельно зарезервированной работы сохраняются;
+противоречия сообщаются явно. Старый summary сам по себе не создаёт активную
+задачу в новом чате. «Всё» не включает ignored-файлы, другие репозитории, worktree
+или ветки и не разрешает force-push; safety-исключения сохраняются.
+`gi only push all` остаётся push-only. Resolver сохраняет полный текст запроса
+в `Requested command`, а не только совпавший алиас.
+`gi только пуш` не выбирает файлы working tree. `gi пуш` нельзя использовать для
+пропуска выбранных допустимых изменений: они коммитятся перед push. Если новый
+commit не нужен, команда всё равно отправляет готовые исходящие коммиты после
+компактных проверок Git, без пустого commit и второй команды. Если нечего
+коммитить и отправлять, агент сообщает это. Git-finish сам по себе не
 разрешает новую реализацию, переписывание ожиданий тестов, удаление runtime-state,
 изменение зависимостей, перезапуск/пересборку сервисов или широкий cleanup ради
 успешной проверки. Ошибка проверки исправляется только когда её вызвали scoped
@@ -1174,10 +1186,16 @@ tracking. Совпадение текущего HEAD с другой удалё�
 аудит продуктовой логики и цикл продуктовых тестов команда не запускает.
 Все task-scoped записи, включая handoff и generated metadata, завершаются до
 staging. После последнего commit/push и последней записи агент снова
-проверяет `git status --short`, а для push — и совпадение с upstream. Совпадение HEAD
+проверяет `git status --short --untracked-files=all`, а для push — и совпадение с upstream. Совпадение HEAD
 не доказывает чистое working tree: при новом task-scoped diff нельзя сообщать о
 полном успехе. После final status check tracked task-файлы не меняются без повтора
 разрешённого finish workflow и проверки.
+До commit staged diff сверяется со всем выбранным scope, включая удаления,
+untracked и ранее staged файлы; исключённые staged изменения не коммитятся,
+пользовательский index молча не сбрасывается. После finish каждый оставшийся
+изменённый путь получает причину исключения или blocker. Допустимый выбранный
+остаток означает незавершённую операцию. Для ожидаемого ignored-файла проверяется
+правило через `git check-ignore`, без force-add из-за слова «всё».
 
 Для `gi пул` агент проверяет состояние рабочей копии, текущую ветку и upstream,
 затем делает `git fetch` и подтягивает текущую ветку. Если появляются

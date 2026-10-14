@@ -7,10 +7,9 @@ across stacks.
 ## Core Rule
 
 - Build applications with clear architecture and code-quality boundaries.
-- Understand and apply OOP, SOLID, DRY, clean-code, maintainability,
-  extensibility, and established design and architecture-pattern principles
-  where they fit the stack, including GoF, GRASP, clean architecture,
-  microservices, DDD, and equivalent stack-appropriate patterns.
+- Choose a design approach that fits the problem, stack, and current constraints.
+  Apply OOP, SOLID, DRY, and established design and architecture patterns by
+  their intent rather than requiring classes or a particular architecture.
 - Prefer cohesive domain models, explicit interfaces at integration boundaries,
   dependency inversion for infrastructure, small composable modules, typed or
   validated contracts, low duplication, clear names, focused functions/classes,
@@ -22,6 +21,99 @@ across stacks.
   modules, functions, services, protocols, and data contracts.
 - Apply DRY to repeated knowledge and behavior, but do not create premature
   abstractions before the duplication has a clear shared meaning.
+
+## System Mechanism And Responsibility Gate
+
+Correct the cause at the owner of the violated responsibility. Use or extend
+the system's intended mechanisms while preserving contracts and invariants.
+Justify every bypass. Apply this gate before meaningful implementation, bug
+fixes, or refactoring; keep its depth proportional to the affected scenario.
+
+1. Trace the scenario from its entry point through decisions, execution, state
+   changes, and observable result. Read current source, relevant contracts,
+   and tests; use targeted retrieval. Distinguish implemented mechanisms from
+   incomplete scaffolding, disabled paths, and historical notes.
+2. Identify the violated or new contract, the invariant to preserve, and the
+   component that owns the decision or state transition. Name where callers
+   consume that behavior and where side effects occur.
+3. Before editing, record a compact mapping in the task plan or relevant local
+   contract: scenario -> mechanism -> contract owner -> change location ->
+   verification. Use concrete source references. Reuse existing task context
+   when it already provides this mapping; do not require another approval,
+   a broad audit, or a new document for every small edit.
+4. Use or extend the existing mechanism at its owner. If it is incomplete,
+   implement the smallest coherent missing contract there. Introduce another
+   mechanism only after explaining why the existing one cannot satisfy the
+   requirement and who will own the new behavior. An interface or unused
+   abstraction alone is not evidence of a working mechanism.
+5. Verify the scenario's result, related invariants, and relevant side effects
+   through the actual participating components. Keep focused source, tests,
+   affected docs, and durable contracts aligned before completing the batch.
+
+- Keep orchestration about sequencing and delegation; keep execution about
+  executing its contract. Do not recreate an owner's domain decisions in
+  callers, views, adapters, cleanup callbacks, or special-case branches.
+- Correct a shared primitive's contract when callers repeatedly compensate
+  for its side effects. Preserve legitimate variants through explicit inputs
+  or operations rather than changing all callers to an assumed global behavior.
+- Make state ownership, handoff, resource acquisition/release, successful
+  completion, cancellation, and failure explicit where applicable. Use the
+  project's architecture; this rule does not mandate a particular pipeline,
+  class hierarchy, framework, or new abstraction layer.
+- Do not destroy a valid state and then restore it to simulate success. Such
+  compensation can still emit events, release resources, or trigger other work
+  between the two operations. Distinguish this from contract-defined rollback
+  or recovery, which must also preserve ownership and observable guarantees.
+- For an unavoidable bypass, record the concrete constraint, why correction at
+  the owner is unavailable, scope, side effects, verification, and the removal
+  condition or review trigger. Keep temporary behavior explicit in the relevant
+  local contract. Do not call an undocumented bypass the completed system fix.
+- Test expected behavior derived from the contract, including representative
+  input types and participating components. Do not change expectations merely
+  to match the new implementation or treat a final-state assertion as proof
+  that intermediate side effects are safe. Report unverified live integrations.
+
+## Principles Across Paradigms
+
+- Apply separation of concerns and single responsibility to units that change
+  for different reasons, whether they are classes, modules, functions,
+  components, or systems. Keep related behavior together.
+- Apply the open-closed principle at proven variation points: extend behavior
+  through a stable contract when that avoids changing unrelated working code.
+  Do not build extension mechanisms for hypothetical variants.
+- Apply the Liskov substitution principle when one implementation replaces
+  another: preserve the caller's expected inputs, outputs, errors, side effects,
+  and invariants. Test interchangeable implementations against the same contract.
+- Keep interfaces and data contracts limited to what their consumers need.
+  Depend on abstractions at meaningful boundaries, especially for external
+  systems; avoid an interface for every class or function.
+- Apply DRY to duplicated knowledge, rules, and behavior with the same meaning.
+  Keep the design as simple as the current requirements allow (KISS); defer
+  speculative features and abstractions until they have a concrete use (YAGNI).
+- Prefer composition for combining independent capabilities. Use inheritance
+  when a stable subtype relationship and its behavioral contract make it the
+  simpler choice. Keep component responsibilities and interactions explicit.
+- Limit a unit's knowledge of other units' internals (Law of Demeter). Review
+  navigation through another unit's mutable internals for unnecessary coupling;
+  a call chain alone is not proof of a design problem.
+- In object-component designs, compose behavior from focused components
+  without requiring a deep class hierarchy. In entity-component-system (ECS)
+  designs, keep entity identity, component data, and system behavior distinct;
+  define data ownership, access, and system ordering according to the framework.
+  Apply the principles above to those boundaries without forcing OOP structure.
+
+## Quality And Architecture Evidence
+
+- Record the quality attributes that matter for the product, such as reliability,
+  performance, security, usability, and maintainability, as observable criteria
+  when they affect an architecture decision. Use
+  [ISO/IEC 25010:2023](https://committee.iso.org/standard/78176.html) as a
+  reference model for choosing attributes, without claiming conformance.
+- For significant decisions, record the relevant stakeholders and concerns,
+  chosen boundaries, alternatives, tradeoffs, and verification evidence in the
+  project's architecture notes or decision record. Use
+  [ISO/IEC/IEEE 42010:2022](https://www.iso.org/standard/74393.html) as a
+  reference for describing architecture; scale the detail to the decision.
 
 ## Work Type Boundaries
 

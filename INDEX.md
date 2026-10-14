@@ -9,6 +9,8 @@
 - `patterns/GIT_WORKFLOW.md`: Git finish rules.
 - `patterns/PROJECT_MEMORY_SPECIFICATIONS.md`: specification status and indexing.
 - `patterns/MODULAR_SERVICE_ENGINEERING.md`: module ownership and integration.
+- `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md`: engineering judgment and
+  system mechanism gate.
 - `templates/SYSTEM_MAP.template.md`, `templates/MODULE_PASSPORT.template.md`,
   `templates/MODULE_CONTRACT.template.md`: modular-system contract templates.
 - `templates/PROJECT_TESTING.template.md`: optional local test scenario scaffold.

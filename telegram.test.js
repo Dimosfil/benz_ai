@@ -150,7 +150,7 @@ test("formats the fuel summary without turning it into a factual guarantee", () 
   assert.match(text, /70,59 ₽/);
   assert.match(text, /Последние опубликованные цены/);
   assert.match(text, /источник: Яндекс/);
-  assert.match(text, /T‑Bank — вероятно есть/);
+  assert.match(text, /T‑Bank — возможно есть/); // Undated grade evidence cannot be current.
   assert.match(text, /Яндекс — цены, не наличие/);
   assert.match(text, /вероятностный характер/);
   assert.match(text, /Версия: ПО 0\.1\.1 · abcdef12 · коммит 11\.07\.2026, 10:30 МСК/);
@@ -232,7 +232,7 @@ test("explains a station-wide negative report separately from empty fuel statuse
   assert.match(text, /Multigo — только карточка АЗС/);
 });
 
-test("renders every station fuel on its own line and omits a missing observation date", () => {
+test("renders petrol grades on separate lines, omits diesel and a missing observation date", () => {
   const text = formatTelegramSummary({
     location: { name: "Бабяково" },
     summary: { total: 1, withPrices: 0, statuses: { no_data: 1 }, fuels: {} },
@@ -249,7 +249,8 @@ test("renders every station fuel on its own line and omits a missing observation
     }],
   });
 
-  assert.match(text, /⛽ 92: ⚪ нет данных\n⛽ 95: ⚪ нет данных\n⛽ DT: ⚪ нет данных/);
+  assert.match(text, /⛽ 92: ⚪ нет данных\n⛽ 95: ⚪ нет данных/);
+  assert.doesNotMatch(text, /⛽ DT:/);
   assert.doesNotMatch(text, /🕒 Данные:/);
   assert.doesNotMatch(text, /01\.01/);
 });

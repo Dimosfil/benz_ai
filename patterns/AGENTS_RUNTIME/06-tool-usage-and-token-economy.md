@@ -112,6 +112,12 @@
   reapply only the intended small patch.
 - Search for specific symbols, paths, errors, or patterns before doing broad
   repository scans.
+- Before meaningful implementation, bug fixes, or refactoring, trace the
+  scenario and record a scoped source-backed mapping: scenario -> mechanism ->
+  contract owner -> change location -> verification. Correct causes at their
+  owner; use or extend existing mechanisms and justify bypasses. Follow the
+  gate in `patterns/ARCHITECTURE_AND_CODE_QUALITY.md` without extra approval or
+  broad audits.
 - Before changing a feature with a recorded workflow contract, read the
   contract and preserve its user-visible sequence, branches, background work,
   loading/error states, and verification guarantees unless the user explicitly

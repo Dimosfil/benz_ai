@@ -82,7 +82,7 @@ test("merges exact co-located catalog duplicates and keeps fresh evidence", () =
   assert.equal(result[0].overallStatus, "maybe_available");
   assert.equal(result[0].name, "Газпромнефть");
   assert.equal(result[0].fuelStatus["92"], "maybe_available");
-  assert.equal(result[0].fuelStatus.CNG, "no_data");
+  assert.equal(result[0].fuelStatus.CNG, undefined);
   assert.equal(result[0].availabilityBySource.gdebenz.confirmations, 3);
 });
 
@@ -229,7 +229,7 @@ test("downgrades a lone bank payment older than 30 minutes", () => {
   assert.equal(merged.fuelStatus["92"], "maybe_available");
 });
 
-test("uses recent corroborated Yandex availability over conflicting negative feeds", () => {
+test("Yandex confirmation preserves grade evidence without turning green before two recent operations", () => {
   const observedAt = new Date(Date.now() - 28 * 60_000).toISOString();
   const bank = station("tbank", "bank-negative", 51.69258, 39.377016, "Газпром");
   bank.availabilityBySource = {
@@ -249,9 +249,9 @@ test("uses recent corroborated Yandex availability over conflicting negative fee
 
   const [merged] = mergeStations([bank, yandex]);
 
-  assert.equal(merged.overallStatus, "available");
+  assert.equal(merged.overallStatus, "maybe_available");
   assert.equal(merged.fuelStatus["92"], "maybe_available");
-  assert.equal(merged.fuelStatus["95"], "available");
+  assert.equal(merged.fuelStatus["95"], "maybe_available");
   assert.equal(merged.availabilityBySource.yandex.queueStatus, "high");
 });
 

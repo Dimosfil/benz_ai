@@ -57,10 +57,14 @@ export function normalizeAlfaStation(station) {
   const statuses = {};
   const prices = {};
   const observedAt = [];
+  const fuelObservedAt = {};
+  const paymentTimesByFuel = {};
   for (const item of fuels) {
     const name = fuelName(item.category);
     statuses[name] = fuelStatus(item.status);
     if (item.last_transaction_at) observedAt.push(item.last_transaction_at);
+    fuelObservedAt[name] = item.last_transaction_at || null;
+    paymentTimesByFuel[name] = recentPaymentTimes([item.last_transaction_at]);
     const price = Number(item.price);
     if (Number.isFinite(price) && price > 0) prices[name] = { value: price, currency: "RUB", source: "alfa" };
   }
@@ -80,7 +84,7 @@ export function normalizeAlfaStation(station) {
     fuelStatus: statuses,
     availabilityBySource: {
       alfa: { overallStatus, fuelStatus: statuses, observedAt: lastTransactionAt,
-        paymentTimes: recentPaymentTimes(observedAt) },
+        fuelObservedAt, paymentTimesByFuel, paymentTimes: recentPaymentTimes(observedAt) },
     },
     confidence: null,
     lastTransactionAt,

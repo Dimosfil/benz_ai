@@ -22,7 +22,6 @@ test("station fuel entries combine availability and prices", () => {
   assert.deepEqual(entries.map(({ type, status, price }) => ({ type, status, price })), [
     { type: "92", status: "maybe_available", price: 64 },
     { type: "95", status: "no_data", price: 68.5 },
-    { type: "DT", status: "not_available", price: null },
   ]);
 });
 
@@ -34,17 +33,18 @@ test("explains missing prices from availability-only station sources", () => {
 });
 
 test("minimum price ignores invalid and nonpositive values", () => {
-  assert.equal(minimumPrice({ prices: { 92: { value: 0 }, 95: { value: -1 }, DT: { value: 71.5 } } }), 71.5);
+  assert.equal(minimumPrice({ prices: { 92: { value: 0 }, 95: { value: -1 }, DT: { value: 71.5 } } }), null);
   assert.equal(minimumPrice({ prices: { 92: { value: "bad" } } }), null);
 });
 
 test("station confidence reports agreement between known source signals", () => {
+  const observedAt = new Date(Date.now() - 5 * 60_000).toISOString();
   const station = {
     overallStatus: "available",
     fuelStatus: { 92: "available" },
     availabilityBySource: {
-      tbank: { overallStatus: "available", fuelStatus: { 92: "available" } },
-      alfa: { overallStatus: "available", fuelStatus: { 92: "available" } },
+      tbank: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
       sber: { overallStatus: "no_data", fuelStatus: { 92: "no_data" } },
     },
   };
@@ -62,17 +62,18 @@ test("station confidence stays hidden when no source has availability evidence",
 });
 
 test("station confidence reflects disagreement between sources", () => {
+  const observedAt = new Date(Date.now() - 5 * 60_000).toISOString();
   assert.deepEqual(stationConfidence({
     overallStatus: "maybe_available",
     fuelStatus: { 95: "maybe_available" },
     availabilityBySource: {
-      tbank: { overallStatus: "available", fuelStatus: { 95: "available" } },
-      gdebenz: { overallStatus: "not_available", fuelStatus: { 95: "not_available" } },
+      tbank: { overallStatus: "available", fuelStatus: { 95: "available" }, observedAt },
+      gdebenz: { overallStatus: "not_available", fuelStatus: { 95: "not_available" }, observedAt },
     },
   }), { matching: 1, total: 2, percent: 50 });
 });
 
-test("uses green only for strongly confirmed availability", () => {
+test("matching typed signals also require two distinct recent bank operations", () => {
   const freshObservedAt = new Date(Date.now() - 10 * 60_000).toISOString();
   const oneSignal = {
     overallStatus: "available",
@@ -91,6 +92,10 @@ test("uses green only for strongly confirmed availability", () => {
 
   assert.equal(selectionStatus(oneSignal), "maybe_available");
   assert.equal(selectionStatus(oneSignal, ["92"]), "maybe_available");
+  assert.equal(selectionStatus(twoSignals), "maybe_available");
+  assert.equal(selectionStatus(twoSignals, ["92"]), "maybe_available");
+  twoSignals.availabilityBySource.sber.paymentTimes = [freshObservedAt,
+    new Date(Date.now() - 20 * 60_000).toISOString()];
   assert.equal(selectionStatus(twoSignals), "available");
   assert.equal(selectionStatus(twoSignals, ["92"]), "available");
 });
@@ -116,7 +121,7 @@ test("keeps a lone recent bank operation yellow without claiming current service
     overallStatus: "maybe_available",
     fuelStatus: { 92: "available", 95: "maybe_available", 98: "not_available" },
     availabilityBySource: {
-      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt },
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available", 95: "maybe_available" }, observedAt },
     },
   };
 
@@ -139,7 +144,7 @@ test("turns a lone bank payment older than 30 minutes yellow", () => {
   assert.equal(selectionStatus(station), "maybe_available");
 });
 
-test("shows recent corroborated Yandex availability and queue", () => {
+test("shows recent Yandex confirmations and queue without bypassing the two-operation rule", () => {
   const observedAt = new Date(Date.now() - 28 * 60_000).toISOString();
   const station = {
     overallStatus: "available",
@@ -160,8 +165,8 @@ test("shows recent corroborated Yandex availability and queue", () => {
   assert.equal(hasRecentCrowdConfirmation(station), true);
   assert.equal(hasRecentCrowdConfirmation(station, ["95"]), true);
   assert.equal(hasRecentCrowdConfirmation(station, ["92"]), false);
-  assert.equal(selectionStatus(station), "available");
-  assert.equal(selectionStatus(station, ["95"]), "available");
+  assert.equal(selectionStatus(station), "maybe_available");
+  assert.equal(selectionStatus(station, ["95"]), "maybe_available");
   assert.match(stationQueueText(station), /Большая очередь · Яндекс Карты · 28 мин назад · 3 подтверждения/);
   assert.match(stationQueueText(station), /Ожидание сейчас может отличаться/);
 });

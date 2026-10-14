@@ -52,6 +52,7 @@ $selected = $routeMatches | Sort-Object AliasLength -Descending | Select-Object 
 $route = $selected.Route
 
 Write-Output ("GI route: {0}" -f $route.id)
+Write-Output ("Requested command: {0}" -f $CommandText.Trim())
 Write-Output ("Matched alias: {0}" -f $selected.Alias)
 Write-Output ("Contract: {0}" -f $route.contract)
 Write-Output "Mandatory context files:"

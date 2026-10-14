@@ -1,4 +1,4 @@
-import { bankPaymentPair, hasOnlyBankStatuses, latestServiceReport, recentPaymentTimes } from "../public/station-evidence.js";
+import { PETROL_FUELS, availabilityStatus, latestServiceReport, mergeFuelPaymentTimes, petrolObservedAt, recentPaymentTimes } from "../public/station-evidence.js";
 import { activeReportedFuels, mergeFuelReports, reportedFuelStatus, resolveFuelReportStatus } from "../public/fuel-reports.js";
 
 export function inBbox(station, bbox) {
@@ -199,38 +199,6 @@ function aggregateStatuses(values) {
   return unique.size === 1 ? known[0] : "maybe_available";
 }
 
-function reliableAggregateStatus(values) {
-  const known = values.filter((value) => value && value !== "no_data");
-  const status = aggregateStatuses(known);
-  return status === "available" && known.length < 2 ? "maybe_available" : status;
-}
-
-const AVAILABLE_SIGNAL_MAX_AGE_MS = 60 * 60_000;
-const RECENT_CROWD_CONFIRMATION_MS = 60 * 60_000;
-const CONFIRMED_CROWD_SOURCES = new Set(["yandex"]);
-
-function freshnessAwareStatus(signal, fuel = null, now = Date.now()) {
-  const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
-  if (status !== "available") return status;
-  const observedAt = Date.parse(signal.observedAt);
-  if (!Number.isFinite(observedAt)) return status;
-  if (observedAt > now + 5 * 60_000 || now - observedAt > AVAILABLE_SIGNAL_MAX_AGE_MS) {
-    return "maybe_available";
-  }
-  return status;
-}
-
-function hasRecentCrowdConfirmation(availabilityBySource, fuel = null, now = Date.now()) {
-  return Object.entries(availabilityBySource || {}).some(([source, signal]) => {
-    const status = fuel ? signal.fuelStatus?.[fuel] : signal.overallStatus;
-    if (!CONFIRMED_CROWD_SOURCES.has(source) || status !== "available" || Number(signal.confirmations) < 2) return false;
-    const observedAt = Date.parse(signal.observedAt);
-    return Number.isFinite(observedAt)
-      && observedAt <= now + 5 * 60_000
-      && now - observedAt <= RECENT_CROWD_CONFIRMATION_MS;
-  });
-}
-
 function latestObservedAt(values) {
   const timestamps = values.filter((value) => Number.isFinite(Date.parse(value)));
   return timestamps.length ? new Date(Math.max(...timestamps.map(Date.parse))).toISOString() : null;
@@ -263,6 +231,9 @@ function mergeEvidence(left = {}, right = {}) {
     ])),
     observedAt: latestObservedAt([left.observedAt, right.observedAt]),
     paymentTimes: recentPaymentTimes([...(left.paymentTimes || []), ...(right.paymentTimes || [])]),
+    ...(left.fuelObservedAt || right.fuelObservedAt ? { fuelObservedAt: { ...older.fuelObservedAt, ...newer.fuelObservedAt } } : {}),
+    ...(left.paymentTimesByFuel || right.paymentTimesByFuel
+      ? { paymentTimesByFuel: mergeFuelPaymentTimes(left.paymentTimesByFuel, right.paymentTimesByFuel) } : {}),
     ...(serviceReport ? { serviceStatus: serviceReport.status, serviceObservedAt: serviceReport.observedAt, serviceReason: serviceReport.reason } : {}),
     operationsCount: maximumNumber([left.operationsCount, right.operationsCount]),
     confirmations: maximumNumber([left.confirmations, right.confirmations]),
@@ -281,28 +252,21 @@ export function recomputeAvailability(station) {
   const serviceReport = latestServiceReport(station.availabilityBySource, now);
   station.serviceStatus = serviceReport?.status || "unknown";
   station.serviceReport = serviceReport;
-  station.overallStatus = bankPaymentPair(station.availabilityBySource, now)
-    || hasRecentCrowdConfirmation(station.availabilityBySource, null, now)
-    ? "available"
-    : reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, null, now)));
-  if (serviceReport?.status === "paused" && station.overallStatus === "available") station.overallStatus = "maybe_available";
-  if (station.overallStatus === "available" && hasOnlyBankStatuses(station.availabilityBySource)
-    && !bankPaymentPair(station.availabilityBySource, now)) station.overallStatus = "maybe_available";
-  const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})));
+  station.overallStatus = availabilityStatus(station.availabilityBySource, [], now);
+  const fuels = new Set(evidence.flatMap((item) => Object.keys(item.fuelStatus || {})).filter((fuel) => PETROL_FUELS.has(fuel)));
+  station.prices = Object.fromEntries(Object.entries(station.prices || {}).filter(([fuel]) => PETROL_FUELS.has(fuel)));
   station.fuelStatus = Object.fromEntries([...fuels].map((fuel) => [
     fuel,
-    hasRecentCrowdConfirmation(station.availabilityBySource, fuel, now)
-      ? "available"
-      : reliableAggregateStatus(evidence.map((item) => freshnessAwareStatus(item, fuel, now)).filter(Boolean)),
+    availabilityStatus(station.availabilityBySource, [fuel], now),
   ]));
   if (serviceReport?.status === "paused") {
     station.fuelStatus = Object.fromEntries(Object.entries(station.fuelStatus)
       .map(([fuel, status]) => [fuel, status === "available" ? "maybe_available" : status]));
   }
-  const observed = evidence.map((item) => item.observedAt).filter((value) => Number.isFinite(Date.parse(value)));
+  const observed = evidence.map(petrolObservedAt).filter((value) => Number.isFinite(Date.parse(value)));
   station.lastTransactionAt = observed.length
     ? new Date(Math.max(...observed.map(Date.parse))).toISOString()
-    : station.lastTransactionAt;
+    : null;
   delete station.baseAvailability;
   if (station.fuelReports?.length) {
     const baseAvailability = { overallStatus: station.overallStatus, fuelStatus: { ...station.fuelStatus } };
@@ -368,6 +332,7 @@ export function summarizeStations(stations) {
   for (const station of stations) {
     statuses[station.overallStatus] = (statuses[station.overallStatus] || 0) + 1;
     for (const [fuel, status] of Object.entries(station.fuelStatus || {})) {
+      if (!PETROL_FUELS.has(fuel)) continue;
       fuels[fuel] ||= { available: 0, maybe_available: 0, not_available: 0, no_data: 0, total: 0 };
       fuels[fuel][status] = (fuels[fuel][status] || 0) + 1;
       fuels[fuel].total += 1;
@@ -379,7 +344,8 @@ export function summarizeStations(stations) {
     brands.set(brandKey, brand);
     const timestamp = Date.parse(station.lastTransactionAt);
     if (Number.isFinite(timestamp) && timestamp <= now + 5 * 60_000) timestamps.push(timestamp);
-    if (Object.values(station.prices || {}).some((price) => Number.isFinite(Number(price?.value)) && Number(price.value) > 0)) withPrices += 1;
+    if (Object.entries(station.prices || {}).some(([fuel, price]) => PETROL_FUELS.has(fuel)
+      && Number.isFinite(Number(price?.value)) && Number(price.value) > 0)) withPrices += 1;
   }
   return {
     total: stations.length,

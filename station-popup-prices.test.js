@@ -103,7 +103,8 @@ for (const hasOrganizationId of [true, false]) test(`opening a popup fills price
     const at = (minutes) => new Date(clock - minutes * 60_000).toISOString();
     const pairStation = { ...station, availabilityBySource: {
       tbank: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: at(5), paymentTimes: [at(5)] },
-      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: at(20), paymentTimes: [at(20)] },
+      alfa: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: at(20),
+        fuelObservedAt: { 92: at(20) }, paymentTimes: [at(20)] },
     } };
     const beforeAgeRefresh = calls;
     view.showStations([pairStation], { preserveStations: true });

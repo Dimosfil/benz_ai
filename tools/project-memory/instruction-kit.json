@@ -1,5 +1,5 @@
 {
-  "instruction_kit_version": "2026.10.03.3",
+  "instruction_kit_version": "2026.10.14.1",
   "source": "https://github.com/Dimosfil/general-instructions.git",
   "installed_at": "2026-07-10",
   "update_check": {
@@ -92,15 +92,16 @@
     "tools/select-project-language.ps1",
     "tools/select-system-language.ps1",
     "patterns/AGENTS_RUNTIME/09-full-testing.md",
-    "templates/PROJECT_TESTING.template.md"
+    "templates/PROJECT_TESTING.template.md",
+    "patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md"
   ],
   "migration_state": {
     "schema_version": 2,
-    "applied_through": "2026.10.03.3__add_project_test_content_contract",
+    "applied_through": "2026.10.14.1__warn_before_third_party_service_launch",
     "additional_applied_migrations": [],
     "skipped_migrations": [
       "2026.09.28.1__isolate_optional_config_failures"
     ]
   },
-  "last_update_check_at": "2026-10-03T16:08:37.139Z"
+  "last_update_check_at": "2026-10-14T15:40:43.7482268+03:00"
 }

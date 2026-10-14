@@ -11,6 +11,12 @@ and project commit-message language preferences.
   unconditional project-local ban on agent commits does override them: report
   the conflict instead of treating `gi пуш` as push-only or suggesting a manual
   commit followed by the same command.
+- If no eligible selected changes need a new commit, `gi push` / `ги пуш`
+  still pushes existing outgoing commits to the configured upstream after the
+  compact Git safety checks. Do not create an empty commit or require a second
+  push-only command. If there is nothing to commit or push, report that state.
+  Never skip eligible selected changes to turn a commit/push request into
+  push-only execution.
 - Before staging for a push, identify the current branch and its upstream. If
   no upstream exists, obtain the intended remote branch before committing and
   set tracking on the first push. Do not infer the destination from another
@@ -38,6 +44,25 @@ and project commit-message language preferences.
   never classify the whole dirty worktree as one package from apparent similarity.
   Ask only when a concrete conflicting scope instruction or inseparable excluded
   change prevents safe selection. `gi only push` never selects working-tree files.
+- Treat `gi push all`, `ги пуш всё`, `ги пуш все`, and equivalent commit or
+  commit/push forms as explicit selection of all eligible tracked and untracked
+  changes in the verified current repository, including staged, unstaged,
+  deleted, and pre-existing changes. This selection overrides the active-task
+  default; do not silently narrow it to this chat's edits. Preserve concrete
+  separate-work reservations and report conflicts with them. A new chat's
+  ordinary `gi push` has the same repository scope when no narrower selection
+  or active task exists; old summaries alone do not create an active task.
+  All-changes selection does not include ignored files, other repositories,
+  worktrees, or branches, and does not override safety exclusions or authorize
+  force-push. `gi only push all` remains push-only.
+- Before staging, inventory the full selection with
+  `git status --short --untracked-files=all`, including existing staged changes.
+  Account for every selected eligible change in the staged diff before commit;
+  do not commit excluded staged changes or silently reset the user's index.
+  After commit/push, report each remaining changed path with its exclusion
+  reason or blocker. An eligible selected remainder makes the finish incomplete;
+  matching upstream HEAD alone is not success. If an expected file is ignored,
+  explain its ignore rule with `git check-ignore` instead of force-adding it.
 - A failed finish-time check does not by itself authorize product fixes, test
   rewrites, runtime-state deletion, dependency changes, service restarts, or
   broad cleanup. Correct only failures caused by the scoped work when the fix is

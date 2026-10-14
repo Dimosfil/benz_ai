@@ -25,8 +25,10 @@ language preferences.
   manual commit followed by `gi пуш`: that command does not fall back to
   push-only behavior.
 - Do not reinterpret `gi пуш` as a raw `git push`, a retry of a previous
-  terminal push, or a push-only command. Push-only behavior is reserved for
-  `gi только пуш`.
+  terminal push, or permission to skip eligible selected changes. Commit those
+  changes first; if none need a new commit, push existing outgoing commits after
+  Git safety checks. Do not create an empty commit or require `gi только пуш`
+  as a second command. That command always skips working-tree selection.
 - `gi пул` means fetch and pull the current branch only; do not switch branches,
   rewrite history, or pull from a different remote unless the user explicitly
   asks.
@@ -69,6 +71,16 @@ language preferences.
   timestamps. Ask only when concrete
   conflicting scope instructions or inseparable excluded changes prevent safe
   selection. `gi only push` does not select working-tree changes.
+- Treat `gi push all`, `ги пуш всё`, `ги пуш все`, and equivalent commit or
+  commit/push forms as explicit repository-wide selection of eligible changes,
+  overriding the active-task default. Include staged, unstaged, untracked,
+  deleted, and pre-existing changes; do not silently restrict them to this
+  chat's edits. Preserve concrete separate-work reservations and report scope
+  conflicts. An ordinary push in a new chat uses the same repository scope
+  without narrower selection or an active task; old summaries alone do not
+  establish an active task. Keep ignored files, other repositories, worktrees,
+  and branches outside this selection. Safety exclusions still apply; this
+  modifier does not authorize force-push. `gi only push all` stays push-only.
 - Do not commit secrets, credentials, local databases, logs, or generated
   caches.
 - Keep rebuildable application builds, frontend bundles, installers, and
@@ -101,7 +113,8 @@ Before any `gi коммит`, `gi пуш`, `gi коммит пуш`, or `gi то
 - finish every task-scoped filesystem write first, including project-memory,
   handoff, generated metadata, formatting, and verification-driven corrections;
   do not create or update a tracked task artifact after staging or committing;
-- inspect `git status --short`;
+- inventory the selection with `git status --short --untracked-files=all`;
+  inspect pre-existing staged changes as well as unstaged and untracked changes;
 - inspect untracked and unusually large files before staging and exclude
   prohibited model/media/content payloads; add an ignore rule during Git finish
   only when the payload was created by the active scoped task or the ignore
@@ -125,16 +138,24 @@ Before any `gi коммит`, `gi пуш`, `gi коммит пуш`, or `gi то
 
 For `gi коммит`:
 
-- stage only scoped task changes;
+- stage all eligible changes in the resolved selection;
+- reconcile the staged diff against the selection, including deletions and
+  previously staged files; do not commit excluded staged changes or silently
+  reset the user's index;
 - create one commit using the configured commit-message language preferences;
 - do not push.
 
 For `gi пуш` and `gi коммит пуш`:
 
-- stage only scoped task changes;
-- create one commit using the configured commit-message language preferences;
-- if there are no scoped changes to commit, report that clearly instead of
-  running a push-only fallback;
+- stage all eligible changes in the resolved selection and reconcile the staged
+  diff against it before committing, including deletions and previously staged
+  files; do not commit excluded staged changes or silently reset the user's index;
+- when selected changes exist, create one commit using the configured
+  commit-message language preferences;
+- if no eligible selected changes need a new commit, still push existing
+  outgoing commits after inspecting them with the same Git safety checks;
+  do not create an empty commit or require a second push-only command;
+- if there is nothing to commit or push, report that the branch is current;
 - push the current branch to its configured upstream.
 
 For `gi только пуш`:
@@ -145,12 +166,16 @@ For `gi только пуш`:
 
 After the last commit or push and before the success response:
 
-- run a final `git status --short` after the last filesystem mutation;
-- verify the resulting commit contains every intended task-scoped tracked
+- run a final `git status --short --untracked-files=all` after the last filesystem mutation;
+- verify the resulting commit contains every eligible selected tracked and untracked
   change, and for a push verify the local branch matches its configured
   upstream;
 - distinguish pre-existing unrelated dirt from new task-scoped residue; never
   claim a clean worktree merely because local and remote HEAD match;
+- report each remaining changed path with its exclusion reason or blocker;
+  any eligible selected remainder makes the finish incomplete. For an expected
+  ignored file, explain the matching rule with `git check-ignore`; do not
+  force-add ignored files because the user requested all changes;
 - if a required task file was changed after the commit, do not silently leave
   it behind or report full success: include it through the authorized finish
   workflow before pushing, or report the exact uncommitted remainder and the

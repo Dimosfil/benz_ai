@@ -36,6 +36,13 @@ surface source limits, and keep local startup simple.
 
 ## Core Safety And Boundaries
 
+- Before implementation, bug fixes, or refactoring, load runtime modules 04,
+  06, and 15. Trace the affected scenario, identify its mechanism and contract
+  owner, and correct the cause there. Justify any bypass. Follow the mechanism
+  gate in `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`.
+- Warn before third-party service launches; load
+  `patterns/AGENTS_RUNTIME/09-runtime-and-defaults.md`. Querying an already
+  running service does not require a launch notice.
 - Verify the active project root and target identity before writes. Treat this
   root as the normal filesystem boundary; exact external paths and actions need
   explicit authorization. Preserve unrelated dirty changes.

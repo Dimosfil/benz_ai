@@ -1,4 +1,4 @@
-import { BANK_SOURCES, latestServiceReport, recentPaymentTimes } from "../public/station-evidence.js";
+import { BANK_SOURCES, latestServiceReport, mergeFuelPaymentTimes, recentPaymentTimes } from "../public/station-evidence.js";
 
 // Only called for user-requested station snapshots. No timer or network work.
 export class StationObservations {
@@ -23,11 +23,15 @@ export class StationObservations {
         const times = BANK_SOURCES.has(source) ? recentPaymentTimes([...(saved.paymentTimes || []),
           ...(signal.paymentTimes || []), signal.observedAt], now) : [];
         const report = latestServiceReport({ saved, incoming: signal }, now);
+        const fuelTimes = saved.paymentTimesByFuel || signal.paymentTimesByFuel
+          ? { paymentTimesByFuel: mergeFuelPaymentTimes(saved.paymentTimesByFuel, signal.paymentTimesByFuel, now) } : {};
         const retained = { ...signal, paymentTimes: times,
+          ...fuelTimes,
           ...(report ? { serviceStatus: report.status, serviceObservedAt: report.observedAt, serviceReason: report.reason } : {}),
         };
         this.records.delete(key);
         if (times.length || report) this.records.set(key, { paymentTimes: times,
+          ...fuelTimes,
           ...(report ? { serviceStatus: report.status, serviceObservedAt: report.observedAt, serviceReason: report.reason } : {}),
         });
         while (this.records.size > this.maxStations) this.records.delete(this.records.keys().next().value);

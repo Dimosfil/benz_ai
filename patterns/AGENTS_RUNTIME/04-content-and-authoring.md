@@ -115,13 +115,10 @@
   and public contracts. Coordinate agents through those contracts and verify an
   assembled workflow. A module need not be a deployable service. Follow
   `patterns/MODULAR_SERVICE_ENGINEERING.md`.
-- Treat senior agent behavior as a compact engineering execution standard, not
-  as a separate personality label. Before code changes, agents should load
-  relevant local context, preserve intended behavior, keep architecture and
-  configuration boundaries clear, work in coherent verified batches, update
-  durable project memory when behavior or architecture changes, and escalate
-  high-risk actions through the documented approval path. Follow
-  `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md`.
+- Apply the system mechanism gate in `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`
+  before implementation, bug fixes, or refactoring: correct causes at the
+  contract owner, reuse/extend mechanisms, and justify bypasses. Follow
+  `patterns/SENIOR_AGENT_ENGINEERING_STANDARD.md` for the execution standard.
 - Use an agent role office when specialist judgment improves the work. Select
   the smallest useful set of professional role lenses, such as product owner,
   tech lead, C#/.NET backend, frontend, UI/UX design, visual art, QA,

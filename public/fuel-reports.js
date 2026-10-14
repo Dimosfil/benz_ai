@@ -1,4 +1,5 @@
 // Shared report policy for server aggregation and browser age refreshes.
+import { PETROL_FUELS } from "./station-evidence.js";
 export const FUEL_REPORT_MAX_AGE_MS = 60 * 60_000;
 export const REPORTABLE_FUELS = Object.freeze(["92", "95"]);
 const INDIRECT_SOURCES = new Set(["tbank", "alfa", "sber"]);
@@ -44,12 +45,9 @@ export function activeReportedFuels(station, now = Date.now()) {
 export function resolveFuelReportStatus(station, selected, baseFuelStatus, baseOverallStatus, now = Date.now()) {
   const reported = activeReportedFuels(station, now);
   if (!reported.length || (selected.length && !selected.some((fuel) => reported.includes(fuel)))) return null;
-  const fuels = selected.length ? selected : [...new Set([...Object.keys(station.fuelStatus || {}), ...reported])];
+  const fuels = selected.length ? selected : [...new Set([...Object.keys(station.fuelStatus || {}), ...reported])]
+    .filter((fuel) => PETROL_FUELS.has(fuel));
   const known = fuels.map((fuel) => reportedFuelStatus(station, fuel, now) || baseFuelStatus(fuel))
     .filter((status) => status && (selected.length || status !== "no_data"));
-  // A general positive signal cannot identify diesel or cancel a petrol report.
-  if (!selected.length && baseOverallStatus === "available" && !known.some((status) => status !== "not_available")) {
-    return "maybe_available";
-  }
   return known.length && new Set(known).size === 1 ? known[0] : "maybe_available";
 }

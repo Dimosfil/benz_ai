@@ -81,6 +81,11 @@ At the end of the batch, the agent should be able to answer:
   operational work ride along with a refactor?
 - Which source is authoritative for each changed default, policy, workflow, or
   contract?
+- Which existing mechanism and contract owner were identified before editing,
+  and does the change correct the cause there? If a bypass remains, what
+  concrete constraint justifies it and when will it be removed or reviewed?
+- Which checks cover the scenario's result and relevant side effects rather
+  than only a restored final state or the implementation's current shape?
 - Which layers consume that source, and how was drift checked?
 - Which durable specification changed, or why no durable spec update was
   needed?

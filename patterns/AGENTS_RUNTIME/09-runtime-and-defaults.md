@@ -1,5 +1,18 @@
 ## Runtime, Docker, First Launch, And Defaults
 
+- Before starting or restarting a third-party service, warn the user in chat
+  before executing the launch. Name the service, explain why it is needed,
+  state whether it runs locally or remotely, and describe applicable effects
+  such as listening ports, continued background operation, data transfer, or
+  cost. Keep the notice concise and based on the planned operation.
+- Treat independently operated services and supporting service dependencies as
+  third-party services, including local daemons and containers. Check scripts,
+  installers, test runners, and container commands for indirect service starts;
+  give the notice before running a command that launches such a service.
+  Merely querying or using an already-running service is not a launch.
+- Give advance notice even when the launch is already authorized. This notice
+  does not itself require waiting for confirmation; apply existing authorization
+  and any separate approval requirements under `03-rule-precedence.md`.
 - Apply the project-local `config_service.enabled` toggle from
   `08-config-service.md` to every operation below. Query or write
   config-service only when integration is effectively enabled. When disabled,

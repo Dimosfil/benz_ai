@@ -19,19 +19,26 @@ function fuelName(value) {
 
 const KNOWN_FUELS = new Set(["80", "92", "95", "98", "100", "DT", "LPG", "CNG"]);
 
+function detailFuelLabels(value) {
+  const labels = String(value || "").trim().split(",").map((label) => label.trim());
+  return labels.every((label) => /^(?:(?:АИ[-‑ ]?|AI)?(?:80|92|95|98|100)|ДТ|DT|ДИЗЕЛЬ|DIESEL|LPG|CNG|ПРОПАН|МЕТАН)$/iu.test(label))
+    ? labels : null;
+}
+
 function normalizeDetail(rawDetail, fuels) {
   const detail = String(rawDetail || "").trim();
   const separator = detail.indexOf("·");
-  if (separator < 0) return { detail, confirmedFuels: fuels };
-  const claimed = detail.slice(0, separator).split(",").map(fuelName);
+  const labels = detailFuelLabels(separator < 0 ? detail : detail.slice(0, separator));
+  if (!labels) return { detail, confirmedFuels: fuels };
+  const claimed = labels.map(fuelName);
   if (!claimed.length || claimed.some((fuel) => !KNOWN_FUELS.has(fuel))) {
     return { detail, confirmedFuels: fuels };
   }
-  const suffix = detail.slice(separator + 1).trim();
+  const suffix = separator < 0 ? "" : detail.slice(separator + 1).trim();
   const claimedSet = new Set(claimed);
   const same = fuels.length === claimedSet.size && fuels.every((fuel) => claimedSet.has(fuel));
   return {
-    detail: same ? suffix : `У источника расходятся данные о марках топлива${suffix ? `. ${suffix}` : ""}`,
+    detail: same ? separator < 0 ? detail : suffix : `У источника расходятся данные о марках топлива${suffix ? `. ${suffix}` : ""}`,
     confirmedFuels: same ? fuels : fuels.filter((fuel) => claimedSet.has(fuel)),
   };
 }
@@ -45,7 +52,10 @@ function observedAt(value) {
 
 export function normalizeGdebenzStation(station) {
   const overallStatus = status(station.status);
-  const fuels = String(station.fuels_now || "").split(",").map(fuelName).filter(Boolean);
+  const detailLabels = detailFuelLabels(String(station.detail || "").split("·")[0]);
+  const declaredFuels = String(station.fuels_now || "").trim() || detailLabels?.join(",") || "";
+  const fuels = declaredFuels.split(",").filter((value) => value.trim())
+    .map(fuelName).filter((fuel) => KNOWN_FUELS.has(fuel));
   const { detail, confirmedFuels } = normalizeDetail(station.detail, fuels);
   const fuelStatus = Object.fromEntries(fuels.map((fuel) => [
     fuel, confirmedFuels.includes(fuel) ? overallStatus : "no_data",

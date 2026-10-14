@@ -17,7 +17,8 @@ function station(source = "tbank", id = "one", times = [at(5)]) {
   return { source, externalId: id, sourceRefs: [{ source, externalId: id }], name: "АЗС",
     lat: 55, lon: 37, overallStatus: "available", fuelStatus: { 92: "available", 95: "maybe_available" }, prices: {},
     availabilityBySource: { [source]: { overallStatus: "available", fuelStatus: { 92: "available", 95: "maybe_available" },
-      observedAt: times[0], paymentTimes: times } } };
+      observedAt: times[0], paymentTimes: times },
+      ...(source !== "gdebenz" ? { gdebenz: { overallStatus: "available", fuelStatus: { 92: "available" }, observedAt: times[0] } } : {}) } };
 }
 function freeze(t) { t.mock.timers.enable({ apis: ["Date"], now: NOW }); }
 function agree(station, expected) {
@@ -113,7 +114,7 @@ test("T-Bank events, Alfa per-fuel dates and Sber last payment feed the same bou
       { type: "transaction", lastUpdatedAt: at(-1) },
     ] });
   assert.deepEqual(bank.availabilityBySource.tbank.paymentTimes, [at(5), at(20)]);
-  agree(bank, "available");
+  agree(bank, "no_data"); // Untyped purchases do not establish petrol availability.
   const alfa = normalizeAlfaStation({ station_id: "one", address: { location: { latitude: 55, longitude: 37 } },
     fuels: [{ category: "AI92", status: "available", last_transaction_at: at(5) },
       { category: "AI95", status: "available", last_transaction_at: at(20) }] });
@@ -121,7 +122,7 @@ test("T-Bank events, Alfa per-fuel dates and Sber last payment feed the same bou
   agree(alfa, "available");
   const sber = normalizeSberStation({ id: "one", availabilityStatus: "available", lastPaymentAt: at(5),
     location: { lat: 55, lon: 37 } });
-  agree(sber, "maybe_available");
+  agree(sber, "no_data");
 });
 
 test("a newer negative report suppresses the pair while an older negative does not", (t) => {

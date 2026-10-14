@@ -36,6 +36,11 @@
 
 ## User Changes
 
+- Before meaningful implementation, bug fixes, or refactoring, apply the system
+  mechanism gate in `patterns/ARCHITECTURE_AND_CODE_QUALITY.md`. Record a scoped
+  scenario -> mechanism -> contract owner -> change location -> verification
+  mapping, correct causes at their owner, extend existing mechanisms, and
+  justify bypasses with constraints, side effects, and a review condition.
 - Do not revert user changes unless explicitly requested.
 - Treat dirty worktrees as normal.
 - If user changes affect the task, work with them.
@@ -109,13 +114,18 @@
   `gi только пуш` pushes existing local commits without creating a new commit.
   Do not reinterpret `gi пуш` as a raw `git push`, a retry of a previous
   terminal push, or a push-only command; if there are no scoped changes to
-  commit, report that clearly instead of falling back to push-only behavior.
+  commit, push existing outgoing commits after compact Git safety checks.
   Inspect status, keep changes outside the resolved scope out, follow commit-message
   preferences, and stop on ambiguous scope, missing remote, conflicts, secrets,
   or push failures.
 - For a branch without an upstream, obtain the intended remote branch before
   staging or committing for a push, then set tracking on the first push. Do not
   infer the target from another branch that happens to contain the same HEAD.
+- Explicit all-changes requests (`gi push all`, `ги пуш всё`, `ги пуш все`,
+  and equivalent commit forms) select all eligible current repository changes
+  ahead of active task scope. Preserve exclusions and separate-work reservations.
+  Reconcile staged content with selected changes and report every remaining
+  changed path with its reason. Eligible selected residue means incomplete work.
 - Resolve commit scope from explicit user-selected changes, then the active
   conversation task. With neither, standalone `gi commit`, `gi push`, and
   `gi commit push` (including Russian aliases) select the current repository's
