@@ -215,7 +215,7 @@ $env:ENABLE_ALFA_AZS = "0" # необязательно: полностью от
 $env:ENABLE_YANDEX_PRICES = "0" # необязательно: отключает Яндекс Карты
 $env:YANDEX_PRICE_LIMIT = "30" # необязательно: ограничивает число проверок
 $env:SUMMARY_PROVIDER_TIMEOUT_MS = "8000" # бюджет ожидания каждого основного источника
-$env:SBER_SUMMARY_TIMEOUT_MS = "2000" # отдельный бюджет медленного браузерного источника
+$env:SBER_SUMMARY_TIMEOUT_MS = "12000" # ожидание Сбера в полной сводке
 $env:YANDEX_SUMMARY_TIMEOUT_MS = "4000" # общий бюджет ценового обогащения сводки
 $env:CHROME_PATH = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 npm start

@@ -74,7 +74,7 @@ export const config = Object.freeze({
     maxActiveAreas: positiveInteger(process.env.SBER_MAX_ACTIVE_AREAS, 10),
     browserIdleMs: positiveInteger(process.env.SBER_BROWSER_IDLE_MS, 30_000),
     requestTimeoutMs: positiveInteger(process.env.SBER_REQUEST_TIMEOUT_MS, 12_000),
-    summaryTimeoutMs: positiveInteger(process.env.SBER_SUMMARY_TIMEOUT_MS, 2_000),
+    summaryTimeoutMs: positiveInteger(process.env.SBER_SUMMARY_TIMEOUT_MS, 12_000),
   }),
   yandex: Object.freeze({
     enabled: enabledByDefault(process.env.ENABLE_YANDEX_PRICES),
