@@ -181,6 +181,26 @@ test("defers a new Sber browser start until an in-progress stop completes", asyn
   assert.equal(worker.cdp !== null, true);
 });
 
+test("reports a Chromium exit during startup and permits a fresh attempt", async (t) => {
+  const priorChromePath = process.env.CHROME_PATH;
+  t.after(() => {
+    if (priorChromePath === undefined) delete process.env.CHROME_PATH;
+    else process.env.CHROME_PATH = priorChromePath;
+  });
+  // Node exits immediately on Chromium's command-line flags.
+  process.env.CHROME_PATH = process.execPath;
+  const worker = new SberBrowserWorker();
+  const expected = /Chromium завершился до готовности DevTools \(код \d+\)/;
+  await Promise.all([
+    assert.rejects(worker.ensureStarted(), expected),
+    assert.rejects(worker.ensureStarted(), expected),
+  ]);
+  assert.equal(worker.status().lastStopReason, "start_failed");
+  assert.match(worker.status().lastError, expected);
+  assert.equal(worker.profileDir, null);
+  await assert.rejects(worker.ensureStarted(), expected);
+});
+
 test("normalizes common fuel names", () => {
   assert.equal(normalizeFuelName("АИ-95"), "95");
   assert.equal(normalizeFuelName("Дизель"), "DT");

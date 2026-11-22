@@ -1,8 +1,8 @@
 # Sber browser-worker lifecycle
 
-Sber AZS station data requires a Chromium session because direct server-side
-requests are challenged. The worker therefore starts Chromium lazily for the
-first Sber request and shares one session across cached active areas.
+The worker requests Sber AZS station data directly first. A JavaScript
+challenge triggers lazy Chromium startup. The worker shares one browser session
+across cached active areas.
 
 ## Resource policy
 
@@ -20,7 +20,10 @@ changing the search result or treating Sber data as available before a browser
 JSON response succeeds.
 
 Startup failures and unexpected Chromium exits also close the CDP socket and
-remove the temporary profile. Application shutdown waits for worker cleanup
+remove the temporary profile. Concurrent requests share startup and cleanup.
+If Chromium exits before startup completes, the worker reports its exit code or
+signal and a later request can retry. Known sandbox startup failures are reported
+without exposing browser stderr. Application shutdown waits for worker cleanup
 before the CLI process exits. Chromium sandboxing stays enabled unless an
 operator explicitly sets `CHROME_NO_SANDBOX=1` for a compatible environment.
 The bundled Compose file does so because the browser is already non-root inside

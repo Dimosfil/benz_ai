@@ -156,11 +156,11 @@ export class SberBrowserWorker {
 
   async ensureStarted() {
     if (this.closePromise) await this.closePromise;
+    if (this.startPromise) return this.startPromise;
     if (this.cdp) return;
-    if (!this.startPromise) this.startPromise = this.start().catch(async (error) => {
+    this.startPromise = this.start().catch(async (error) => {
       this.lastError = error;
-      await this.stop("start_failed").catch(() => {});
-      this.startPromise = null;
+      await this.close("start_failed").catch(() => {});
       throw error;
     });
     await this.startPromise;
@@ -171,14 +171,37 @@ export class SberBrowserWorker {
     if (!chromePath) throw new Error("Chrome/Edge не найден; задайте CHROME_PATH");
     this.profileDir = await mkdtemp(join(tmpdir(), "benz-ai-sber-"));
     const chrome = spawn(chromePath, chromeArguments(this.profileDir), {
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", "pipe"],
       windowsHide: true,
     });
     this.chrome = chrome;
     const profileDir = this.profileDir;
+    let starting = true;
+    let launchError;
+    let sandboxUnavailable = false;
+    let stderrTail = "";
+    chrome.stderr.setEncoding("utf8").on("data", (chunk) => {
+      if (!starting || sandboxUnavailable) return;
+      sandboxUnavailable = /No usable sandbox|Running as root without --no-sandbox|Failed to move to new namespace/i
+        .test(stderrTail + chunk);
+      stderrTail = chunk.slice(-80);
+    });
+    chrome.once("error", (error) => {
+      if (starting) launchError = new Error(`Не удалось запустить Chromium (${error.code || "ошибка процесса"})`);
+    });
+    const checkStartupProcess = () => {
+      if (launchError) throw launchError;
+      if (chrome.exitCode !== null || chrome.signalCode !== null) {
+        const reason = chrome.signalCode || `код ${chrome.exitCode}`;
+        const sandbox = sandboxUnavailable ? ": песочница недоступна на этом узле" : "";
+        throw new Error(`Chromium завершился до готовности DevTools (${reason})${sandbox}`);
+      }
+      if (this.chrome !== chrome) throw new Error("Запуск Chromium прерван");
+    };
     chrome.once("exit", () => {
       if (this.chrome !== chrome) return;
       this.cdp?.close();
+      if (starting) return;
       this.cdp = null;
       this.chrome = null;
       this.startPromise = null;
@@ -187,19 +210,20 @@ export class SberBrowserWorker {
       if (!this.stopping) this.recordStop("browser_exit");
     });
 
-    const activePortFile = join(this.profileDir, "DevToolsActivePort");
+    const activePortFile = join(profileDir, "DevToolsActivePort");
     let port = null;
     let browserWebSocketPath = null;
     for (let attempt = 0; attempt < 60; attempt += 1) {
+      checkStartupProcess();
       try {
         const [portLine, webSocketPath] = (await readFile(activePortFile, "utf8")).split(/\r?\n/);
         port = Number(portLine);
         browserWebSocketPath = webSocketPath || null;
         if (Number.isFinite(port)) break;
       } catch {}
-      if (this.chrome.exitCode !== null) throw new Error("Chromium завершился до запуска DevTools");
       await wait(250);
     }
+    checkStartupProcess();
     if (!port) throw new Error("Chromium не открыл DevTools endpoint");
     let targets = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(5_000) }).then((response) => response.json());
     let page = targets.find((target) => target.type === "page");
@@ -216,16 +240,19 @@ export class SberBrowserWorker {
       page = targets.find((target) => target.id === targetId);
     }
     if (!page?.webSocketDebuggerUrl) throw new Error("Chromium не создал страницу DevTools");
-    this.cdp = new CdpClient(page.webSocketDebuggerUrl);
-    await this.cdp.connect();
-    await this.cdp.send("Page.enable");
-    await this.cdp.send("Runtime.enable");
-    await this.cdp.send("Page.navigate", { url: "https://sberazs.ru/" });
+    checkStartupProcess();
+    const cdp = new CdpClient(page.webSocketDebuggerUrl);
+    this.cdp = cdp;
+    await cdp.connect();
+    await cdp.send("Page.enable");
+    await cdp.send("Runtime.enable");
+    await cdp.send("Page.navigate", { url: "https://sberazs.ru/" });
 
     let ready = false;
     for (let attempt = 0; attempt < 40; attempt += 1) {
       await wait(500);
-      ready = Boolean(await this.cdp.evaluate(`(async()=>{try{
+      checkStartupProcess();
+      ready = Boolean(await cdp.evaluate(`(async()=>{try{
         const response=await fetch('/api/stations/meta',{signal:AbortSignal.timeout(1500)});
         if(!response.ok)return false;
         const data=await response.json();
@@ -233,7 +260,9 @@ export class SberBrowserWorker {
       }catch{return false}})()`));
       if (ready) break;
     }
+    checkStartupProcess();
     if (!ready) throw new Error("Sber AZS не завершил браузерную JavaScript-проверку");
+    starting = false;
     this.lastError = null;
     this.lastStartedAt = new Date().toISOString();
     this.lastStopReason = null;
@@ -415,7 +444,7 @@ export class SberBrowserWorker {
     this.cdp?.close();
     this.cdp = null;
     const chrome = this.chrome;
-    if (chrome && chrome.exitCode === null) {
+    if (chrome?.pid && chrome.exitCode === null && chrome.signalCode === null) {
       const exited = new Promise((resolve) => chrome.once("exit", resolve));
       try { chrome.kill(); } catch {}
       await Promise.race([exited, wait(3_000)]);
