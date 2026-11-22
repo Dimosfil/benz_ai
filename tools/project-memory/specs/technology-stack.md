@@ -17,7 +17,7 @@
 | Package manager | npm | `package.json` |
 | Tests | Node.js test runner | `npm test` |
 | Build | Docker/Compose produces the release OCI image | `Dockerfile`, `compose.yaml`, `tools/AGENT_RUNBOOK.md` |
-| Container | Docker image based on Node.js 22 Debian slim with Chromium; Compose runtime | `Dockerfile`, `compose.yaml`, `.dockerignore` |
+| Container | Node.js 22 Debian slim with Chromium. Image code runs from `/usr/src/app` so a BotHost `/app` mount cannot hide it. The `data` symlink preserves persistent storage at `/app/data`. | `Dockerfile`, `compose.yaml`, `.dockerignore` |
 
 ## External services
 

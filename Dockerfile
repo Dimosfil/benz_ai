@@ -16,8 +16,11 @@ ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA} \
 
 ENV HOME=/tmp
 
-WORKDIR /app
-RUN mkdir -p /app/data/payments /app/data/station-reports && chown -R node:node /app/data
+# BotHost can overlay /app with a host checkout. Run the files baked into the image.
+WORKDIR /usr/src/app
+RUN mkdir -p /app/data/payments /app/data/station-reports \
+    && chown -R node:node /app/data \
+    && ln -s /app/data data
 
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
